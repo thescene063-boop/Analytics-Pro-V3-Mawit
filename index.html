@@ -278,6 +278,9 @@
             let k_status = getCol('settlement status') || getCol('status');
             let k_shop = getCol('Shop name') || getCol('Shop') || getCol('ร้านค้า');
             
+            // 📌 [เพิ่มตรงนี้] ค้นหาคอลัมน์ชื่อสินค้าเหมือนหน้า Analytics
+            let k_product = getCol('Item name') || getCol('Product name') || getCol('ชื่อสินค้า') || getCol('ชื่อผลิตภัณฑ์') || getCol('Product') || getCol('Item') || getCol('สินค้า') || getCol('รายการสินค้า');
+
             let k_orderDate = getCol('Order date') || getCol('date') || getCol('วันที่');
             let k_settleDate = getCol('Commission settlement date') || getCol('settlement date');
 
@@ -309,18 +312,26 @@
                     dateDisplaySettle = rawSettleDate.toString().split(' ')[0];
                 }
 
+                // 📌 [เพิ่มตรงนี้] ดึงชื่อสินค้า และดักจับกรณีที่ไม่มีชื่อสินค้า
+                let shopNameStr = row[k_shop] ? row[k_shop].toString().trim() : 'ไม่ระบุร้านค้า';
+                let rawProduct = row[k_product];
+                let finalProductName = (rawProduct && rawProduct !== 'undefined' && rawProduct !== 'null' && rawProduct.toString().trim() !== '') ? rawProduct.toString().trim() : `📦 สินค้าลับ (ร้าน: ${shopNameStr})`;
+
                 globalData.push({
                     orderId: orderId,
                     gmv: cleanNum(row[k_gmv]),
                     commEst: estCommVal,        
                     commFinal: finalCommVal,    
                     status: statusTh,
-                    shop: row[k_shop] ? row[k_shop].toString().trim() : 'ไม่ระบุร้านค้า',
+                    shop: shopNameStr,
+                    productName: finalProductName, // 📌 [เพิ่มบรรทัดนี้] ยัดชื่อสินค้าส่งไปให้หน้าสองใช้
                     dateDisplay: dateDisplayOrder,
                     dateSort: dateSortOrder,
                     settleDisplay: dateDisplaySettle
                 });
             });
+
+            // ... โค้ดส่วนบันทึก localStorage (ปล่อยไว้เหมือนเดิมได้เลย) ...
 
             try { 
                 localStorage.setItem('affiliateData', JSON.stringify(globalData)); 
