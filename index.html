@@ -221,12 +221,16 @@
                     
                     if (json.length === 0) return alert("ไฟล์ว่างเปล่าครับมึง!");
 
-                    let headerIdx = -1;
-                    for(let i=0; i<json.length; i++) {
-                        if (json[i].some(cell => cell && cell.toString().toLowerCase().includes('order id'))) {
-                            headerIdx = i; break;
-                        }
-                    }
+                   let headerIdx = -1;
+for(let i=0; i<json.length; i++) {
+    if (json[i].some(cell => {
+        let text = cell ? cell.toString().toLowerCase() : '';
+        // เพิ่มคำว่า 'หมายเลขคำสั่งซื้อ' ของ TikTok เข้าไป
+        return text.includes('order id') || text.includes('หมายเลขคำสั่งซื้อ');
+    })) {
+        headerIdx = i; break;
+    }
+}
 
                     if (headerIdx === -1) return alert("หาหัวตารางไม่เจอครับ เช็คไฟล์ดูหน่อย");
 
@@ -268,21 +272,20 @@
             return datePart; 
         }
 
-        function extractData(data, headers) {
+       function extractData(data, headers) {
             let getCol = (keyword) => headers.find(h => h && h.toString().toLowerCase().includes(keyword.toLowerCase()));
 
-            let k_orderId = getCol('Order ID') || getCol('ID') || headers[0]; 
-            let k_gmv = getCol('GMV') || getCol('Total');
-            let k_comm = getCol('Est. standard commission') || getCol('standard commission') || getCol('commission');
-            let k_finalComm = getCol('Total final earned amount') || getCol('final earned amount') || getCol('ยอดเงินที่ได้รับ');
-            let k_status = getCol('settlement status') || getCol('status');
-            let k_shop = getCol('Shop name') || getCol('Shop') || getCol('ร้านค้า');
+            // 1. ดักจับคอลัมน์ภาษาไทยตามไฟล์ TikTok
+            let k_orderId = getCol('Order ID') || getCol('หมายเลขคำสั่งซื้อ') || headers[0]; 
+            let k_gmv = getCol('GMV');
+            let k_comm = getCol('Est. standard commission') || getCol('ค่าคอมมิชชั่นมาตรฐานโดยประมาณ');
+            let k_finalComm = getCol('Total final earned amount') || getCol('ยอดรายได้รวมสุดท้าย');
+            let k_status = getCol('settlement status') || getCol('สถานะการชำระคำสั่งซื้อ');
+            let k_shop = getCol('Shop name') || getCol('ชื่อร้านค้า');
+            let k_product = getCol('Item name') || getCol('Product name') || getCol('ชื่อสินค้า');
             
-            // 📌 [เพิ่มตรงนี้] ค้นหาคอลัมน์ชื่อสินค้าเหมือนหน้า Analytics
-            let k_product = getCol('Item name') || getCol('Product name') || getCol('ชื่อสินค้า') || getCol('ชื่อผลิตภัณฑ์') || getCol('Product') || getCol('Item') || getCol('สินค้า') || getCol('รายการสินค้า');
-
-            let k_orderDate = getCol('Order date') || getCol('date') || getCol('วันที่');
-            let k_settleDate = getCol('Commission settlement date') || getCol('settlement date');
+            let k_orderDate = getCol('Order date') || getCol('วันที่สั่งซื้อ');
+            let k_settleDate = getCol('Commission settlement date') || getCol('วันที่ชำระเงินค่าคอมมิชชั่น');
 
             globalData = []; 
 
@@ -292,10 +295,17 @@
 
                 let rawStatus = row[k_status] ? row[k_status].toString().trim() : 'Unknown';
                 let statusTh = rawStatus;
-                if (rawStatus === 'AwaitingPayment') statusTh = 'รอชำระเงิน';
-                else if (rawStatus === 'Pending') statusTh = 'รอดำเนินการ';
-                else if (rawStatus === 'Settled') statusTh = 'ได้รับเงินแล้ว';
-                else if (rawStatus === 'Ineligible') statusTh = 'ยกเลิก';
+                
+                // 📌 2. แก้เงื่อนไขสถานะตรงนี้ให้ตรงกับ TikTok 100%
+                if (rawStatus === 'AwaitingPayment' || rawStatus === 'ยังไม่ชำระเงิน' || rawStatus.includes('รอชำระ')) {
+                    statusTh = 'รอชำระเงิน';
+                } else if (rawStatus === 'รอดำเนินการ' || rawStatus === 'Pending') {
+                    statusTh = 'รอดำเนินการ'; 
+                } else if (rawStatus === 'ชำระแล้ว' || rawStatus === 'Settled' || rawStatus === 'เสร็จสิ้น') {
+                    statusTh = 'ได้รับเงินแล้ว'; // ของ TikTok 'ชำระแล้ว' คือได้เงินเข้ากระเป๋า
+                } else if (rawStatus === 'ไม่มีสิทธิ์' || rawStatus === 'Ineligible' || rawStatus === 'ยกเลิก' || rawStatus === 'คืนเงิน') {
+                    statusTh = 'ยกเลิก'; // ของ TikTok ใช้คำว่า 'ไม่มีสิทธิ์' แทนคำว่ายกเลิก
+                }
 
                 let rawOrderDate = row[k_orderDate] || '';
                 let rawSettleDate = row[k_settleDate] || '';
@@ -312,7 +322,6 @@
                     dateDisplaySettle = rawSettleDate.toString().split(' ')[0];
                 }
 
-                // 📌 [เพิ่มตรงนี้] ดึงชื่อสินค้า และดักจับกรณีที่ไม่มีชื่อสินค้า
                 let shopNameStr = row[k_shop] ? row[k_shop].toString().trim() : 'ไม่ระบุร้านค้า';
                 let rawProduct = row[k_product];
                 let finalProductName = (rawProduct && rawProduct !== 'undefined' && rawProduct !== 'null' && rawProduct.toString().trim() !== '') ? rawProduct.toString().trim() : `📦 สินค้าลับ (ร้าน: ${shopNameStr})`;
@@ -324,12 +333,16 @@
                     commFinal: finalCommVal,    
                     status: statusTh,
                     shop: shopNameStr,
-                    productName: finalProductName, // 📌 [เพิ่มบรรทัดนี้] ยัดชื่อสินค้าส่งไปให้หน้าสองใช้
+                    productName: finalProductName, 
                     dateDisplay: dateDisplayOrder,
                     dateSort: dateSortOrder,
                     settleDisplay: dateDisplaySettle
                 });
             });
+
+            // ส่วนบันทึก localStorage ปล่อยไว้เหมือนเดิม
+
+            // ส่วนบันทึกลง localStorage ปล่อยไว้เหมือนเดิม
 
             // ... โค้ดส่วนบันทึก localStorage (ปล่อยไว้เหมือนเดิมได้เลย) ...
 
