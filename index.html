@@ -9,659 +9,737 @@
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Kanit', sans-serif; background-color: #f3f4f6; }
-        .glass-card { background: rgba(255, 255, 255, 0.95); border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .glass-card { background: rgba(255, 255, 255, 0.98); border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 1px 3px -1px rgba(0, 0, 0, 0.02); border: 1px solid #f1f5f9; }
         .fade-in { animation: fadeIn 0.3s ease-in; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-        
-        .tab-btn { transition: all 0.2s ease-in-out; font-size: 0.85rem; }
+        .tab-btn { transition: all 0.2s ease-in-out; }
         .tab-active-all { background-color: #4f46e5 !important; color: white !important; border-color: #4f46e5 !important; }
         .tab-active-settled { background-color: #22c55e !important; color: white !important; border-color: #22c55e !important; }
         .tab-active-cancelled { background-color: #ef4444 !important; color: white !important; border-color: #ef4444 !important; }
         .tab-active-pending { background-color: #f97316 !important; color: white !important; border-color: #f97316 !important; }
         .tab-active-awaiting { background-color: #eab308 !important; color: white !important; border-color: #eab308 !important; }
         
+        /* Custom Scrollbar for mobile tables */
+        .custom-scrollbar::-webkit-scrollbar { height: 5px; width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        #loadingOverlay { position: fixed; inset: 0; background: rgba(255,255,255,0.92); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+        .spinner { width: 48px; height: 48px; border: 5px solid #e0e7ff; border-top-color: #4f46e5; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="text-gray-800 p-4 md:p-8 text-sm">
+<body class="text-gray-800 p-2 sm:p-4 md:p-8 text-sm relative">
 
-    <div class="max-w-7xl mx-auto">
-        <div class="flex flex-col md:flex-row justify-between items-center mb-6 glass-card p-5 border-t-4 border-indigo-500 shadow-sm">
-            <div>
-                <h1 class="text-xl md:text-2xl font-bold text-indigo-700">📊 Analytics Pro(สรุปยอด) By.MAWIT</h1>
-                <p class="text-sm text-gray-500 mt-1" id="statusText">อัปโหลดไฟล์ Excel หรือ CSV ของคุณได้เลยครับ</p>
-            </div>
-            <div class="mt-4 md:mt-0">
-                <input type="file" id="excelFileInput" accept=".csv, .xlsx, .xls, .tsv, */*" class="block w-full text-xs text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer shadow-sm"/>
-            </div>
+<div id="loadingOverlay" style="display:none;">
+    <div class="spinner"></div>
+    <p class="text-indigo-700 font-bold text-base" id="loadingText">กำลังประมวลผลไฟล์...</p>
+    <p class="text-gray-400 text-xs">ถ้าไฟล์ใหญ่อาจใช้เวลาสักครู่</p>
+</div>
+
+<!-- Back to Top Button -->
+<button id="backToTopBtn" onclick="scrollToTop()" class="fixed bottom-4 right-4 md:bottom-8 md:right-8 bg-indigo-600 text-white p-3 md:p-4 rounded-full shadow-lg shadow-indigo-300 hover:bg-indigo-700 hover:shadow-xl transition-all duration-300 z-50 opacity-0 pointer-events-none translate-y-4 focus:outline-none flex items-center justify-center" aria-label="กลับขึ้นบนสุด">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md:h-6 md:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
+    </svg>
+</button>
+
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 md:mb-6 glass-card p-4 md:p-5 border-t-4 border-indigo-500 shadow-sm gap-3 md:gap-0">
+        <div>
+            <h1 class="text-lg md:text-2xl font-bold text-indigo-700 leading-tight">📊 Analytics Pro (สรุปยอด)</h1>
+            <p class="text-xs md:text-sm text-gray-500 mt-1" id="statusText">อัปโหลดไฟล์ Excel หรือ CSV ของคุณได้เลยครับ</p>
         </div>
+        <div class="w-full md:w-auto">
+            <input type="file" id="excelFileInput" accept=".csv, .xlsx, .xls, .tsv, */*" class="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer shadow-sm transition"/>
+        </div>
+    </div>
 
-        <div id="filterSection" class="hidden mb-6 glass-card p-5 fade-in">
-            <h3 class="text-sm font-bold text-gray-700 mb-3">📅 กรองข้อมูลตาม "วันที่" <span class="text-xs text-gray-500 font-normal">(ยอดเงินอิงตามวันโอนเข้า / สถานะอื่นอิงวันสั่งซื้อ)</span></h3>
-            <div class="flex flex-wrap items-end gap-4">
-                <div>
-                    <label class="block text-xs text-gray-600 mb-1 font-medium">ตั้งแต่วันที่</label>
-                    <input type="date" id="startDate" class="border border-gray-300 rounded-lg p-2 text-sm text-gray-700 focus:outline-none focus:border-indigo-500 shadow-sm">
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-600 mb-1 font-medium">ถึงวันที่</label>
-                    <input type="date" id="endDate" class="border border-gray-300 rounded-lg p-2 text-sm text-gray-700 focus:outline-none focus:border-indigo-500 shadow-sm">
-                </div>
-                <div class="flex flex-wrap items-center gap-2">
-                    <button id="btnFilter" class="bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-bold hover:bg-indigo-700 transition shadow-sm">🔍 ค้นหา</button>
-                    <button id="btnClear" class="bg-gray-200 text-gray-700 px-5 py-2 rounded-lg text-sm font-bold hover:bg-gray-300 transition shadow-sm">🔄 ล้างค่า</button>
-                    
-                    <div class="hidden sm:block w-px h-8 bg-gray-200 mx-1"></div>
-                    
-                    <a href="analytics.html" class="bg-purple-50 text-purple-700 border border-purple-200 px-5 py-2 rounded-lg text-sm font-bold hover:bg-purple-100 transition shadow-sm flex items-center gap-1">
-                        🚀 ไปหน้าวิเคราะห์เชิงลึก
-                    </a>
-                    
-                    <button onclick="localStorage.clear(); sessionStorage.clear(); location.reload();" class="bg-red-50 text-red-600 border border-red-200 px-5 py-2 rounded-lg text-sm font-bold hover:bg-red-100 transition shadow-sm flex items-center gap-1" title="กดเมื่อไฟล์ค้างหรือเปิดหน้าเว็บไม่ขึ้น">
-                        🗑️ ล้างข้อมูล (แก้ค้าง)
+    <!-- Filters -->
+    <div id="filterSection" class="hidden mb-4 md:mb-6 glass-card p-4 md:p-5 fade-in">
+        <h3 class="text-[13px] md:text-sm font-bold text-gray-700 mb-3 leading-tight">📅 กรองข้อมูลตาม "วันที่" <br class="sm:hidden"/><span class="text-[10px] md:text-xs text-gray-500 font-normal">(ยอดเงินอิงตามวันโอน / สถานะอื่นอิงวันสั่งซื้อ)</span></h3>
+        <div class="grid grid-cols-2 md:flex md:flex-wrap items-end gap-3 md:gap-4">
+            <div class="col-span-1">
+                <label class="block text-[11px] md:text-xs text-gray-600 mb-1 font-medium">ตั้งแต่วันที่</label>
+                <input type="date" id="startDate" class="w-full border border-gray-200 rounded-lg p-2 text-[13px] md:text-sm text-gray-700 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 bg-gray-50 transition">
+            </div>
+            <div class="col-span-1">
+                <label class="block text-[11px] md:text-xs text-gray-600 mb-1 font-medium">ถึงวันที่</label>
+                <input type="date" id="endDate" class="w-full border border-gray-200 rounded-lg p-2 text-[13px] md:text-sm text-gray-700 focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 bg-gray-50 transition">
+            </div>
+            <div class="col-span-2 flex flex-wrap items-center gap-2 mt-1 md:mt-0">
+                <button id="btnFilter" class="flex-1 md:flex-none bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs md:text-sm font-bold hover:bg-indigo-700 transition shadow-sm">🔍 ค้นหา</button>
+                <button id="btnClear" class="flex-1 md:flex-none bg-white border border-gray-300 text-gray-600 px-4 py-2 rounded-lg text-xs md:text-sm font-bold hover:bg-gray-50 transition shadow-sm">🔄 ล้างค่า</button>
+                <div class="hidden md:block w-px h-8 bg-gray-200 mx-1"></div>
+                <div class="w-full md:w-auto flex gap-2 mt-2 md:mt-0">
+                    <button id="btnGoAnalytics" class="flex-1 md:flex-none bg-purple-50 text-purple-700 border border-purple-200 px-3 md:px-5 py-2 rounded-lg text-xs md:text-sm font-bold hover:bg-purple-100 transition shadow-sm flex items-center justify-center gap-1">
+                        🚀 วิเคราะห์ลึก
                     </button>
-                </div>
-            </div>
-        </div>
-
-        <div id="dashboardContent">
-            <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-                <div class="glass-card p-4 border-l-4 border-green-500 hover:shadow-md transition bg-green-50">
-                    <p class="text-xs text-green-700 mb-1 font-bold">💰 ได้รับเงินแล้ว (จริง)</p>
-                    <h2 class="text-2xl font-bold text-green-600" id="valSettledComm">฿0.00</h2>
-                </div>
-                <div class="glass-card p-4 border-l-4 border-purple-500 hover:shadow-md transition">
-                    <p class="text-xs text-gray-600 mb-1 font-medium">ค่าคอมมิชชั่น (ไม่หักยอด)</p>
-                    <h2 class="text-xl font-bold text-purple-700" id="valTotalComm">฿0.00</h2>
-                </div>
-                <div class="glass-card p-4 border-l-4 border-gray-500 hover:shadow-md transition">
-                    <p class="text-xs text-gray-600 mb-1 font-medium">ยอดออเดอร์ทั้งหมด</p>
-                    <h2 class="text-xl font-bold text-gray-700" id="valTotalOrders">0 ออเดอร์</h2>
-                </div>
-                <div class="glass-card p-4 border-l-4 border-blue-500 hover:shadow-md transition">
-                    <p class="text-xs text-gray-600 mb-1 font-medium">ยอดขายรวม (GMV)</p>
-                    <h2 class="text-xl font-bold text-blue-700" id="valTotalGMV">฿0.00</h2>
-                </div>
-                <div class="glass-card p-4 border-l-4 border-red-500 hover:shadow-md transition">
-                    <p class="text-xs text-gray-600 mb-1 font-medium">ออเดอร์ที่โดนยกเลิก</p>
-                    <h2 class="text-xl font-bold text-red-600" id="valCancelOrders">0 ออเดอร์</h2>
-                    <p class="text-xs text-red-500 mt-1 font-bold" id="valCancelComm">ค่าคอมหาย: ฿0.00</p>
-                </div>
-            </div>
-
-            <div class="glass-card p-5 mb-8 overflow-x-auto hover:shadow-md transition fade-in">
-                <h3 class="text-lg font-bold text-gray-800 mb-4">📌 สรุปสถานะออเดอร์</h3>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="statusCards"></div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 fade-in">
-                <div class="glass-card p-5 hover:shadow-md transition">
-                    <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-3 cursor-pointer select-none" onclick="toggleSection('leftTableContainer', 'leftIcon')">
-                        <h3 class="text-[15px] font-bold text-gray-800 flex items-center gap-2">📌 รายละเอียดสถานะตามร้านค้า(ออเดอร์)</h3>
-                        <span id="leftIcon" class="transform transition-transform duration-200 text-gray-400 font-bold">▲</span>
-                    </div>
-                    <div id="leftTableContainer" class="overflow-x-auto w-full transition-all duration-300">
-                        <table class="w-full text-sm text-left">
-                            <thead class="text-xs text-gray-600 sticky top-0 bg-white/95 backdrop-blur shadow-sm border-b border-gray-200">
-                                <tr>
-                                    <th class="py-3 px-2 font-bold bg-white">ร้านค้า</th>
-                                    <th class="py-3 px-2 text-center font-bold bg-white text-[#f97316]">รอชำระเงิน</th>
-                                    <th class="py-3 px-2 text-center font-bold bg-white text-[#3b82f6]">รอดำเนินการ</th>
-                                    <th class="py-3 px-2 text-center font-bold bg-white text-[#22c55e]">ได้รับเงินแล้ว</th>
-                                    <th class="py-3 px-2 text-center font-bold bg-white text-[#ef4444]">โดนยกเลิก</th>
-                                </tr>
-                            </thead>
-                            <tbody id="leftTableBody">
-                                <tr><td colspan="5" class="py-4 text-center text-gray-400 italic">รอข้อมูล...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="glass-card p-5 hover:shadow-md transition">
-                    <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-3 cursor-pointer select-none" onclick="toggleSection('rightTableContainer', 'rightIcon')">
-                        <h3 class="text-[15px] font-bold text-gray-800 flex items-center gap-2">🏪 จำนวนออเดอร์รายร้านค้า</h3>
-                        <span id="rightIcon" class="transform transition-transform duration-200 text-gray-400 font-bold">▲</span>
-                    </div>
-                    <div id="rightTableContainer" class="overflow-x-auto w-full transition-all duration-300">
-                        <table class="w-full text-sm text-left">
-                            <thead class="text-xs text-gray-600 sticky top-0 bg-white/95 backdrop-blur shadow-sm border-b border-gray-200">
-                                <tr>
-                                    <th class="py-3 px-2 font-bold bg-white">ร้านค้า</th>
-                                    <th class="py-3 px-2 text-right font-bold bg-white">จำนวนออเดอร์ทั้งหมด</th>
-                                    <th class="py-3 px-2 text-right font-bold bg-white">ค่าคอมที่ขายได้</th>
-                                </tr>
-                            </thead>
-                            <tbody id="rightTableBody">
-                                <tr><td colspan="3" class="py-4 text-center text-gray-400 italic">รอข้อมูล...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <div class="glass-card p-5 overflow-x-auto hover:shadow-md transition">
-                <div class="flex flex-col md:flex-row justify-between md:items-center mb-4 gap-3 border-b pb-4">
-                    <h3 class="text-lg font-bold text-gray-800">📅 สถิติแบบเจาะลึกรายวัน</h3>
-                    <div class="flex gap-2 overflow-x-auto pb-2 hide-scroll">
-                        <button onclick="switchDailyTab('all')" id="tab-all" class="tab-btn tab-active-all px-4 py-1.5 rounded-full font-bold shadow-sm whitespace-nowrap border">ภาพรวม</button>
-                        <button onclick="switchDailyTab('settled')" id="tab-settled" class="tab-btn bg-white text-gray-600 border border-gray-200 px-4 py-1.5 rounded-full font-bold hover:bg-green-50 whitespace-nowrap">✅ ได้รับเงินแล้ว</button>
-                        <button onclick="switchDailyTab('pending')" id="tab-pending" class="tab-btn bg-white text-gray-600 border border-gray-200 px-4 py-1.5 rounded-full font-bold hover:bg-orange-50 whitespace-nowrap">⏳ รอดำเนินการ</button>
-                        <button onclick="switchDailyTab('awaiting')" id="tab-awaiting" class="tab-btn bg-white text-gray-600 border border-gray-200 px-4 py-1.5 rounded-full font-bold hover:bg-yellow-50 whitespace-nowrap">⏱️ รอชำระเงิน</button>
-                        <button onclick="switchDailyTab('cancelled')" id="tab-cancelled" class="tab-btn bg-white text-gray-600 border border-gray-200 px-4 py-1.5 rounded-full font-bold hover:bg-red-50 whitespace-nowrap">❌ ยกเลิก</button>
-                    </div>
-                </div>
-
-                <div class="space-y-4" id="dailyContainer">
-                    <div class="text-sm text-gray-400 italic">รอข้อมูล...</div>
+                    <button onclick="clearAllData()" class="flex-1 md:flex-none bg-red-50 text-red-600 border border-red-200 px-3 md:px-5 py-2 rounded-lg text-xs md:text-sm font-bold hover:bg-red-100 transition shadow-sm flex items-center justify-center gap-1">
+                        🗑️ ล้างไฟล์
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
-        function toggleSection(containerId, iconId) {
-            const container = document.getElementById(containerId);
-            const icon = document.getElementById(iconId);
-            if (container.classList.contains('hidden')) {
-                container.classList.remove('hidden');
-                icon.style.transform = 'rotate(0deg)';
-            } else {
-                container.classList.add('hidden');
-                icon.style.transform = 'rotate(180deg)';
-            }
-        }
+    <div id="dashboardContent">
+        <!-- Summary Cards: Mobile Optimized Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4 mb-4 md:mb-6">
+            <div class="glass-card p-3 md:p-4 border-l-4 border-green-500 hover:shadow-md transition bg-green-50 flex flex-col justify-center">
+                <p class="text-[10px] md:text-xs text-green-700 mb-0.5 md:mb-1 font-bold">💰 ได้รับเงินแล้ว (จริง)</p>
+                <h2 class="text-lg sm:text-xl md:text-2xl font-bold text-green-600 truncate" id="valSettledComm">฿0.00</h2>
+            </div>
+            <div class="glass-card p-3 md:p-4 border-l-4 border-purple-500 hover:shadow-md transition flex flex-col justify-center">
+                <p class="text-[10px] md:text-xs text-gray-600 mb-0.5 md:mb-1 font-medium leading-tight">ค่าคอมฯ (ไม่หักยอด)</p>
+                <h2 class="text-base sm:text-lg md:text-xl font-bold text-purple-700 truncate" id="valTotalComm">฿0.00</h2>
+            </div>
+            <div class="glass-card p-3 md:p-4 border-l-4 border-gray-400 hover:shadow-md transition flex flex-col justify-center">
+                <p class="text-[10px] md:text-xs text-gray-600 mb-0.5 md:mb-1 font-medium">ยอดออเดอร์ทั้งหมด</p>
+                <h2 class="text-base sm:text-lg md:text-xl font-bold text-gray-700 truncate" id="valTotalOrders">0 ออเดอร์</h2>
+            </div>
+            <div class="glass-card p-3 md:p-4 border-l-4 border-blue-500 hover:shadow-md transition flex flex-col justify-center">
+                <p class="text-[10px] md:text-xs text-gray-600 mb-0.5 md:mb-1 font-medium">ยอดขายรวม (GMV)</p>
+                <h2 class="text-base sm:text-lg md:text-xl font-bold text-blue-700 truncate" id="valTotalGMV">฿0.00</h2>
+            </div>
+            <!-- This card spans 2 columns on mobile to balance the grid -->
+            <div class="glass-card p-3 md:p-4 border-l-4 border-red-500 hover:shadow-md transition col-span-2 lg:col-span-1 flex flex-col justify-center bg-red-50/30">
+                <div class="flex justify-between items-start md:block">
+                    <div>
+                        <p class="text-[10px] md:text-xs text-gray-600 mb-0.5 md:mb-1 font-medium">ออเดอร์โดนยกเลิก</p>
+                        <h2 class="text-base sm:text-lg md:text-xl font-bold text-red-600 truncate" id="valCancelOrders">0 ออเดอร์</h2>
+                    </div>
+                    <div class="text-right md:text-left mt-0 md:mt-1">
+                        <p class="text-[10px] md:text-[11px] text-red-500 font-bold bg-red-100 px-2 py-0.5 rounded-md inline-block" id="valCancelComm">หาย: ฿0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-        const formatMoney = (num) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(num);
-        let globalData = []; 
+        <div class="glass-card p-4 md:p-5 mb-4 md:mb-8 overflow-x-auto hover:shadow-md transition fade-in">
+            <h3 class="text-base md:text-lg font-bold text-gray-800 mb-3 md:mb-4 flex items-center gap-1.5"><span class="text-indigo-500">📌</span> สรุปสถานะออเดอร์</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4" id="statusCards"></div>
+        </div>
 
-        window.onload = function() {
-            try {
-                let savedData = localStorage.getItem('affiliateData');
-                let savedName = localStorage.getItem('affiliateFileName') || 'ไฟล์ที่บันทึกไว้';
-                if (savedData) {
-                    globalData = JSON.parse(savedData);
-                    
-                    let allDates = globalData.map(item => item.dateSort).filter(d => d !== '');
-                    let minDate = allDates.length > 0 ? allDates.reduce((a, b) => a < b ? a : b) : '-';
-                    let maxDate = allDates.length > 0 ? allDates.reduce((a, b) => a > b ? a : b) : '-';
-                    let formatThai = (d) => { let p = d.split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : d; };
+        <!-- Detail Tables (Collapsed by default, Mobile Scrollable) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-4 md:mb-8 fade-in">
+            
+            <!-- Left Table -->
+            <div class="glass-card p-4 md:p-5 hover:shadow-md transition flex flex-col">
+                <div class="flex justify-between items-center border-b border-gray-100 pb-3 cursor-pointer select-none" onclick="toggleSection('leftTableContainer', 'leftIcon')">
+                    <h3 class="text-[14px] md:text-[15px] font-bold text-gray-800 flex items-center gap-1.5"><span class="text-indigo-500">📌</span> รายละเอียดตามร้านค้า</h3>
+                    <span id="leftIcon" class="text-gray-400 font-bold transition-all duration-200 text-sm">▼</span>
+                </div>
+                <div id="leftTableContainer" class="hidden pt-3 overflow-x-auto w-full transition-all duration-300 custom-scrollbar">
+                    <!-- min-w applied to force horizontal scroll on mobile instead of squishing text -->
+                    <table class="w-full text-sm text-left min-w-[450px] md:min-w-full">
+                        <thead class="text-[11px] md:text-xs text-gray-600 sticky top-0 bg-white/95 backdrop-blur shadow-sm border-b border-gray-200 whitespace-nowrap">
+                            <tr>
+                                <th class="py-2.5 px-2 font-bold bg-white">ร้านค้า</th>
+                                <th class="py-2.5 px-2 text-center font-bold bg-white text-[#f97316]">รอชำระ</th>
+                                <th class="py-2.5 px-2 text-center font-bold bg-white text-[#3b82f6]">รอดำเนินการ</th>
+                                <th class="py-2.5 px-2 text-center font-bold bg-white text-[#22c55e]">ได้รับเงิน</th>
+                                <th class="py-2.5 px-2 text-center font-bold bg-white text-[#ef4444]">ยกเลิก</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leftTableBody" class="whitespace-nowrap">
+                            <tr><td colspan="5" class="py-4 text-center text-gray-400 text-xs italic">รอข้อมูล...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
-                    let shortName = savedName.length > 25 ? savedName.substring(0, 15) + '...' + savedName.substring(savedName.lastIndexOf('.')) : savedName;
+            <!-- Right Table -->
+            <div class="glass-card p-4 md:p-5 hover:shadow-md transition flex flex-col">
+                <div class="flex justify-between items-center border-b border-gray-100 pb-3 cursor-pointer select-none" onclick="toggleSection('rightTableContainer', 'rightIcon')">
+                    <h3 class="text-[14px] md:text-[15px] font-bold text-gray-800 flex items-center gap-1.5"><span class="text-indigo-500">🏪</span> จำนวนออเดอร์รายร้าน</h3>
+                    <span id="rightIcon" class="text-gray-400 font-bold transition-all duration-200 text-sm">▼</span>
+                </div>
+                <div id="rightTableContainer" class="hidden pt-3 overflow-x-auto w-full transition-all duration-300 custom-scrollbar">
+                    <table class="w-full text-sm text-left min-w-[350px] md:min-w-full">
+                        <thead class="text-[11px] md:text-xs text-gray-600 sticky top-0 bg-white/95 backdrop-blur shadow-sm border-b border-gray-200 whitespace-nowrap">
+                            <tr>
+                                <th class="py-2.5 px-2 font-bold bg-white">ร้านค้า</th>
+                                <th class="py-2.5 px-2 text-center md:text-right font-bold bg-white">ออเดอร์รวม</th>
+                                <th class="py-2.5 px-2 text-right font-bold bg-white">ค่าคอมที่ขายได้</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rightTableBody" class="whitespace-nowrap">
+                            <tr><td colspan="3" class="py-4 text-center text-gray-400 text-xs italic">รอข้อมูล...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
 
-                    document.getElementById('statusText').innerHTML = `✅ ไฟล์: <span class="font-bold text-gray-800">${shortName}</span> | 📅 ข้อมูลช่วง: <span class="font-bold text-indigo-600">${formatThai(minDate)} ถึง ${formatThai(maxDate)}</span> <span class="text-xs text-gray-400 ml-1">(${globalData.length} ออเดอร์)</span>`;
-                    document.getElementById('statusText').className = "text-sm text-green-600 mt-2";
-                    
-                    document.getElementById('filterSection').classList.remove('hidden');
-                    renderDashboard(globalData);
-                }
-            } catch (error) {
-                console.error("Memory Overload, Auto-clearing...", error);
-                localStorage.clear();
-                alert("ข้อมูลเดิมใหญ่เกินไปจนทำให้เว็บค้าง ระบบได้ทำการล้างข้อมูลให้แล้ว กรุณาอัปโหลดไฟล์ใหม่อีกครั้งครับ");
-            }
+        <!-- Daily Stats (Collapsed by default) -->
+        <div class="glass-card p-4 md:p-5 overflow-hidden hover:shadow-md transition">
+            <div class="flex justify-between items-center border-b border-gray-100 pb-3 cursor-pointer select-none" onclick="toggleSection('dailyContentWrapper', 'dailyIcon')">
+                <h3 class="text-base md:text-lg font-bold text-gray-800 flex items-center gap-1.5"><span class="text-indigo-500">📅</span> สถิติเจาะลึกรายวัน</h3>
+                <span id="dailyIcon" class="text-gray-400 font-bold transition-all duration-200 text-sm">▼</span>
+            </div>
+
+            <div id="dailyContentWrapper" class="hidden pt-4 transition-all duration-300">
+                <div class="flex flex-col border-b pb-3 mb-4">
+                    <div class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                        <button onclick="switchDailyTab('all')" id="tab-all" class="tab-btn tab-active-all px-4 py-1.5 rounded-full text-[11px] md:text-[13px] font-bold shadow-sm whitespace-nowrap border border-gray-200">ภาพรวม</button>
+                        <button onclick="switchDailyTab('settled')" id="tab-settled" class="tab-btn bg-white text-gray-600 border border-gray-200 px-3 md:px-4 py-1.5 rounded-full text-[11px] md:text-[13px] font-bold hover:bg-green-50 whitespace-nowrap">✅ ได้รับเงิน</button>
+                        <button onclick="switchDailyTab('pending')" id="tab-pending" class="tab-btn bg-white text-gray-600 border border-gray-200 px-3 md:px-4 py-1.5 rounded-full text-[11px] md:text-[13px] font-bold hover:bg-orange-50 whitespace-nowrap">⏳ รอดำเนินการ</button>
+                        <button onclick="switchDailyTab('awaiting')" id="tab-awaiting" class="tab-btn bg-white text-gray-600 border border-gray-200 px-3 md:px-4 py-1.5 rounded-full text-[11px] md:text-[13px] font-bold hover:bg-yellow-50 whitespace-nowrap">⏱️ รอชำระเงิน</button>
+                        <button onclick="switchDailyTab('cancelled')" id="tab-cancelled" class="tab-btn bg-white text-gray-600 border border-gray-200 px-3 md:px-4 py-1.5 rounded-full text-[11px] md:text-[13px] font-bold hover:bg-red-50 whitespace-nowrap">❌ ยกเลิก</button>
+                    </div>
+                </div>
+                <div class="space-y-4" id="dailyContainer">
+                    <div class="text-xs text-gray-400 italic text-center py-4">รอข้อมูล...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ==================== IndexedDB Helper ====================
+const DB_NAME = 'AffiliateDB';
+const DB_VERSION = 1;
+const STORE_NAME = 'data';
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        let req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = e => {
+            let db = e.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
         };
+        req.onsuccess = e => resolve(e.target.result);
+        req.onerror = e => reject(e.target.error);
+    });
+}
 
-        document.getElementById('excelFileInput').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
+async function dbSet(key, value) {
+    let db = await openDB();
+    return new Promise((resolve, reject) => {
+        let tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).put(value, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = e => reject(e.target.error);
+    });
+}
 
-            document.getElementById('statusText').innerText = "กำลังประมวลผลไฟล์ (ถ้าไฟล์ใหญ่หน้าเว็บอาจจะค้างแป๊บนึง กรุณารอ)...";
-            document.getElementById('statusText').className = "text-sm text-blue-600 font-bold mt-1";
+async function dbGet(key) {
+    let db = await openDB();
+    return new Promise((resolve, reject) => {
+        let tx = db.transaction(STORE_NAME, 'readonly');
+        let req = tx.objectStore(STORE_NAME).get(key);
+        req.onsuccess = e => resolve(e.target.result);
+        req.onerror = e => reject(e.target.error);
+    });
+}
 
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, {type: 'array'});
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const json = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: "", raw: false});
-                    
-                    if (json.length === 0) return alert("ไฟล์ว่างเปล่าครับมึง!");
+async function dbClear() {
+    let db = await openDB();
+    return new Promise((resolve, reject) => {
+        let tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = e => reject(e.target.error);
+    });
+}
 
-                   let headerIdx = -1;
-for(let i=0; i<json.length; i++) {
-    if (json[i].some(cell => {
-        let text = cell ? cell.toString().toLowerCase() : '';
-        // เพิ่มคำว่า 'หมายเลขคำสั่งซื้อ' ของ TikTok เข้าไป
-        return text.includes('order id') || text.includes('หมายเลขคำสั่งซื้อ');
-    })) {
-        headerIdx = i; break;
+function clearAllData() {
+    dbClear().then(() => {
+        localStorage.clear();
+        sessionStorage.clear();
+        location.reload();
+    });
+}
+
+// ==================== Utility ====================
+function toggleSection(containerId, iconId) {
+    const container = document.getElementById(containerId);
+    const icon = document.getElementById(iconId);
+    if (container.classList.contains('hidden')) {
+        container.classList.remove('hidden');
+        icon.style.transform = 'rotate(180deg)';
+    } else {
+        container.classList.add('hidden');
+        icon.style.transform = 'rotate(0deg)';
     }
 }
 
-                    if (headerIdx === -1) return alert("หาหัวตารางไม่เจอครับ เช็คไฟล์ดูหน่อย");
+const formatMoney = (num) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(num);
+let globalData = [];
 
-                    let headers = json[headerIdx].map(h => h ? h.toString().trim() : '');
-                    let dataRows = json.slice(headerIdx + 1);
+function showLoading(text) {
+    document.getElementById('loadingText').innerText = text || 'กำลังประมวลผล...';
+    document.getElementById('loadingOverlay').style.display = 'flex';
+}
+function hideLoading() {
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
 
-                    let parsedData = dataRows.map(row => {
-                        let obj = {};
-                        headers.forEach((h, i) => { obj[h] = row[i]; });
-                        return obj;
-                    });
+// ==================== Back to Top Logic ====================
+const backToTopBtn = document.getElementById("backToTopBtn");
+window.addEventListener("scroll", () => {
+    if (window.scrollY > 300) {
+        backToTopBtn.classList.remove("opacity-0", "pointer-events-none", "translate-y-4");
+        backToTopBtn.classList.add("opacity-100", "pointer-events-auto", "translate-y-0");
+    } else {
+        backToTopBtn.classList.add("opacity-0", "pointer-events-none", "translate-y-4");
+        backToTopBtn.classList.remove("opacity-100", "pointer-events-auto", "translate-y-0");
+    }
+});
 
-                    localStorage.setItem('affiliateFileName', file.name);
-                    extractData(parsedData, headers);
+function scrollToTop() {
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
+}
 
-                } catch(err) {
-                    alert("อ่านไฟล์ไม่สำเร็จ Error: " + err.message);
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        });
+// ==================== On Load ====================
+window.onload = async function() {
+    try {
+        let savedData = await dbGet('affiliateData');
+        let savedName = (await dbGet('affiliateFileName')) || localStorage.getItem('affiliateFileName') || 'ไฟล์ที่บันทึกไว้';
 
-        function cleanNum(val) {
-            if (!val) return 0;
-            return parseFloat(val.toString().replace(/[^\d.-]/g, '')) || 0;
-        }
-
-        function parseDateForSort(dateStr) {
-            if (!dateStr) return '';
-            let datePart = dateStr.toString().split(' ')[0]; 
-            let parts = datePart.includes('/') ? datePart.split('/') : datePart.split('-');
-            
-            if(parts.length === 3) {
-                if(parts[0].length === 4) {
-                    return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-                }
-                return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-            }
-            return datePart; 
-        }
-
-       function extractData(data, headers) {
-            let getCol = (keyword) => headers.find(h => h && h.toString().toLowerCase().includes(keyword.toLowerCase()));
-
-            // 1. ดักจับคอลัมน์ภาษาไทยตามไฟล์ TikTok
-            let k_orderId = getCol('Order ID') || getCol('หมายเลขคำสั่งซื้อ') || headers[0]; 
-            let k_gmv = getCol('GMV');
-            let k_comm = getCol('Est. standard commission') || getCol('ค่าคอมมิชชั่นมาตรฐานโดยประมาณ');
-            let k_finalComm = getCol('Total final earned amount') || getCol('ยอดรายได้รวมสุดท้าย');
-            let k_status = getCol('settlement status') || getCol('สถานะการชำระคำสั่งซื้อ');
-            let k_shop = getCol('Shop name') || getCol('ชื่อร้านค้า');
-            let k_product = getCol('Item name') || getCol('Product name') || getCol('ชื่อสินค้า');
-            
-            let k_orderDate = getCol('Order date') || getCol('วันที่สั่งซื้อ');
-            let k_settleDate = getCol('Commission settlement date') || getCol('วันที่ชำระเงินค่าคอมมิชชั่น');
-
-            globalData = []; 
-
-            data.forEach(row => {
-                let orderId = row[k_orderId];
-                if (!orderId || orderId.toString().trim() === '') return; 
-
-                let rawStatus = row[k_status] ? row[k_status].toString().trim() : 'Unknown';
-                let statusTh = rawStatus;
-                
-                // 📌 2. แก้เงื่อนไขสถานะตรงนี้ให้ตรงกับ TikTok 100%
-                if (rawStatus === 'AwaitingPayment' || rawStatus === 'ยังไม่ชำระเงิน' || rawStatus.includes('รอชำระ')) {
-                    statusTh = 'รอชำระเงิน';
-                } else if (rawStatus === 'รอดำเนินการ' || rawStatus === 'Pending') {
-                    statusTh = 'รอดำเนินการ'; 
-                } else if (rawStatus === 'ชำระแล้ว' || rawStatus === 'Settled' || rawStatus === 'เสร็จสิ้น') {
-                    statusTh = 'ได้รับเงินแล้ว'; // ของ TikTok 'ชำระแล้ว' คือได้เงินเข้ากระเป๋า
-                } else if (rawStatus === 'ไม่มีสิทธิ์' || rawStatus === 'Ineligible' || rawStatus === 'ยกเลิก' || rawStatus === 'คืนเงิน') {
-                    statusTh = 'ยกเลิก'; // ของ TikTok ใช้คำว่า 'ไม่มีสิทธิ์' แทนคำว่ายกเลิก
-                }
-
-                let rawOrderDate = row[k_orderDate] || '';
-                let rawSettleDate = row[k_settleDate] || '';
-
-                let estCommVal = cleanNum(row[k_comm]);
-                let finalCommVal = row[k_finalComm] !== undefined && row[k_finalComm] !== '' ? cleanNum(row[k_finalComm]) : estCommVal;
-
-                let targetDateOrder = rawOrderDate;
-                let dateDisplayOrder = targetDateOrder.toString().split(' ')[0] || 'ไม่มีวันที่';
-                let dateSortOrder = parseDateForSort(targetDateOrder);
-                
-                let dateDisplaySettle = '';
-                if (statusTh === 'ได้รับเงินแล้ว' && rawSettleDate.toString().trim() !== '' && rawSettleDate.toString().trim() !== '/') {
-                    dateDisplaySettle = rawSettleDate.toString().split(' ')[0];
-                }
-
-                let shopNameStr = row[k_shop] ? row[k_shop].toString().trim() : 'ไม่ระบุร้านค้า';
-                let rawProduct = row[k_product];
-                let finalProductName = (rawProduct && rawProduct !== 'undefined' && rawProduct !== 'null' && rawProduct.toString().trim() !== '') ? rawProduct.toString().trim() : `📦 สินค้าลับ (ร้าน: ${shopNameStr})`;
-
-                globalData.push({
-                    orderId: orderId,
-                    gmv: cleanNum(row[k_gmv]),
-                    commEst: estCommVal,        
-                    commFinal: finalCommVal,    
-                    status: statusTh,
-                    shop: shopNameStr,
-                    productName: finalProductName, 
-                    dateDisplay: dateDisplayOrder,
-                    dateSort: dateSortOrder,
-                    settleDisplay: dateDisplaySettle
-                });
-            });
-
-            // ส่วนบันทึก localStorage ปล่อยไว้เหมือนเดิม
-
-            // ส่วนบันทึกลง localStorage ปล่อยไว้เหมือนเดิม
-
-            // ... โค้ดส่วนบันทึก localStorage (ปล่อยไว้เหมือนเดิมได้เลย) ...
-
-            try { 
-                localStorage.setItem('affiliateData', JSON.stringify(globalData)); 
-            } 
-            catch(e) { 
-                alert("คำเตือน: ข้อมูลไฟล์ใหญ่เกินกว่าเบราว์เซอร์จะจำไว้ส่งไปหน้า Analytics ได้ (แต่มึงยังดูสรุปในหน้านี้ได้ปกตินะ)");
-                console.error("Local Storage Error", e); 
-            }
-
+        if (savedData && savedData.length > 0) {
+            globalData = savedData;
+            updateStatusBar(savedName);
             document.getElementById('filterSection').classList.remove('hidden');
-            
-            let allDates = globalData.map(item => item.dateSort).filter(d => d !== '');
-            let minDate = allDates.length > 0 ? allDates.reduce((a, b) => a < b ? a : b) : '-';
-            let maxDate = allDates.length > 0 ? allDates.reduce((a, b) => a > b ? a : b) : '-';
-            let formatThai = (d) => { let p = d.split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : d; };
-
-            let fileInput = document.getElementById('excelFileInput');
-            let rawFileName = fileInput.files.length > 0 ? fileInput.files[0].name : (localStorage.getItem('affiliateFileName') || 'ข้อมูลที่บันทึกไว้');
-            let shortName = rawFileName.length > 25 ? rawFileName.substring(0, 15) + '...' + rawFileName.substring(rawFileName.lastIndexOf('.')) : rawFileName;
-
-            document.getElementById('statusText').innerHTML = `✅ ไฟล์: <span class="font-bold text-gray-800">${shortName}</span> | 📅 ข้อมูลช่วง: <span class="font-bold text-indigo-600">${formatThai(minDate)} ถึง ${formatThai(maxDate)}</span> <span class="text-xs text-gray-400 ml-1">(${globalData.length} ออเดอร์)</span>`;
-            document.getElementById('statusText').className = "text-sm text-green-600 mt-2";
-
             renderDashboard(globalData);
         }
+    } catch (error) {
+        console.error("Load error:", error);
+        await dbClear();
+        localStorage.clear();
+    }
+};
 
-        document.getElementById('btnFilter').addEventListener('click', () => {
-            renderDashboard(globalData);
-        });
+// ==================== File Upload ====================
+document.getElementById('excelFileInput').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    showLoading('กำลังอ่านไฟล์ ' + file.name + '...');
 
-        document.getElementById('btnClear').addEventListener('click', () => {
-            document.getElementById('startDate').value = '';
-            document.getElementById('endDate').value = '';
-            renderDashboard(globalData);
-        });
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        setTimeout(() => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: "", raw: false});
 
-        const makeShopPills = (shopsObj, bgClass, textClass) => {
-            let keys = Object.keys(shopsObj).sort((a,b) => shopsObj[b].count - shopsObj[a].count);
-            if(keys.length === 0) return `<span class="text-xs text-gray-400 italic">- ไม่มีข้อมูล -</span>`;
-            return keys.map(s => `<span class="${bgClass} ${textClass} px-2.5 py-1 rounded-lg text-xs font-bold border whitespace-nowrap">${s} (x${shopsObj[s].count}) ${shopsObj[s].comm > 0 ? `👉 ${formatMoney(shopsObj[s].comm)}` : ''}</span>`).join(' ');
-        };
+                if (json.length === 0) { hideLoading(); return alert("ไฟล์ว่างเปล่าครับ!"); }
 
-        function renderDashboard(data) {
-            let start = document.getElementById('startDate').value; 
-            let end = document.getElementById('endDate').value; 
-
-            let totalOrders = 0, totalGMV = 0, validCommEst = 0, cancelCount = 0, lostComm = 0, settledCommReal = 0;
-            let statusMap = { 'รอชำระเงิน': 0, 'รอดำเนินการ': 0, 'ได้รับเงินแล้ว': 0, 'ยกเลิก': 0 };
-            
-            let dailyStats = {};   
-            let shopStats = {}; 
-
-            data.forEach(item => {
-                let passOrderDate = true;
-                if (start || end) {
-                    if (!item.dateSort) passOrderDate = false;
-                    else {
-                        if (start && item.dateSort < start) passOrderDate = false;
-                        if (end && item.dateSort > end) passOrderDate = false;
-                    }
+                let headerIdx = -1;
+                for (let i = 0; i < json.length; i++) {
+                    if (json[i].some(cell => {
+                        let text = cell ? cell.toString().toLowerCase() : '';
+                        return text.includes('order id') || text.includes('หมายเลขคำสั่งซื้อ');
+                    })) { headerIdx = i; break; }
                 }
 
-                let passSettleDate = false;
-                let sortSettleDate = '';
-                if (item.status === 'ได้รับเงินแล้ว' && item.settleDisplay) {
-                    sortSettleDate = parseDateForSort(item.settleDisplay);
-                    passSettleDate = true;
-                    if (start || end) {
-                        if (start && sortSettleDate < start) passSettleDate = false;
-                        if (end && sortSettleDate > end) passSettleDate = false;
-                    }
-                }
+                if (headerIdx === -1) { hideLoading(); return alert("หาหัวตารางไม่เจอครับ เช็คไฟล์ดูหน่อย"); }
 
-                if (!passOrderDate && !passSettleDate) return;
-
-                if (!shopStats[item.shop]) {
-                    shopStats[item.shop] = { 
-                        total: 0, awaiting: 0, pending: 0, settled: 0, ineligible: 0, commReal: 0 
-                    };
-                }
-
-                if (passOrderDate) {
-                    totalOrders++;
-                    totalGMV += item.gmv;
-                    validCommEst += item.commEst; 
-
-                    if (statusMap[item.status] !== undefined) statusMap[item.status]++;
-                    else statusMap[item.status] = 1;
-
-                    if (item.status === 'ยกเลิก') { cancelCount++; lostComm += item.commEst; } 
-
-                    shopStats[item.shop].total++;
-                    if (item.status === 'รอชำระเงิน') shopStats[item.shop].awaiting++;
-                    else if (item.status === 'รอดำเนินการ') shopStats[item.shop].pending++;
-                    else if (item.status === 'ยกเลิก') shopStats[item.shop].ineligible++;
-                    else if (item.status === 'ได้รับเงินแล้ว') shopStats[item.shop].settled++;
-
-                    if (!dailyStats[item.dateDisplay]) {
-                        dailyStats[item.dateDisplay] = { 
-                            dateSort: item.dateSort,
-                            totalOrders: 0, totalGMV: 0, totalEstComm: 0, 
-                            realSettledCount: 0, realSettledComm: 0, realSettledShops: {},
-                            sCount: 0, sComm: 0, sShops: {},
-                            cCount: 0, cComm: 0, cShops: {},
-                            pCount: 0, pComm: 0, pShops: {},
-                            aCount: 0, aComm: 0, aShops: {}
-                        };
-                    }
-                    
-                    let d = dailyStats[item.dateDisplay];
-                    d.totalOrders++;
-                    d.totalGMV += item.gmv;
-                    d.totalEstComm += item.commEst; 
-
-                    if (item.status === 'ยกเลิก') {
-                        d.cCount++; d.cComm += item.commEst;
-                        if(!d.cShops[item.shop]) d.cShops[item.shop] = {count: 0, comm: 0};
-                        d.cShops[item.shop].count++; d.cShops[item.shop].comm += item.commEst;
-                    } else if (item.status === 'รอดำเนินการ') {
-                        d.pCount++; d.pComm += item.commEst;
-                        if(!d.pShops[item.shop]) d.pShops[item.shop] = {count: 0, comm: 0};
-                        d.pShops[item.shop].count++; d.pShops[item.shop].comm += item.commEst;
-                    } else if (item.status === 'รอชำระเงิน') {
-                        d.aCount++; d.aComm += item.commEst;
-                        if(!d.aShops[item.shop]) d.aShops[item.shop] = {count: 0, comm: 0};
-                        d.aShops[item.shop].count++; d.aShops[item.shop].comm += item.commEst;
-                    }
-                }
-
-                if (passSettleDate) {
-                    settledCommReal += item.commFinal;
-                    shopStats[item.shop].commReal += item.commFinal;
-
-                    if (!dailyStats[item.settleDisplay]) {
-                        let sortDate = parseDateForSort(item.settleDisplay);
-                        dailyStats[item.settleDisplay] = { 
-                            dateSort: sortDate,
-                            totalOrders: 0, totalGMV: 0, totalEstComm: 0,
-                            realSettledCount: 0, realSettledComm: 0, realSettledShops: {},
-                            sCount: 0, sComm: 0, sShops: {},
-                            cCount: 0, cComm: 0, cShops: {},
-                            pCount: 0, pComm: 0, pShops: {},
-                            aCount: 0, aComm: 0, aShops: {}
-                        };
-                    }
-                    let dSettle = dailyStats[item.settleDisplay];
-                    dSettle.realSettledCount++;
-                    dSettle.realSettledComm += item.commFinal;
-                    
-                    if (!dSettle.realSettledShops[item.shop]) dSettle.realSettledShops[item.shop] = {count: 0, comm: 0};
-                    dSettle.realSettledShops[item.shop].count++;
-                    dSettle.realSettledShops[item.shop].comm += item.commFinal;
-                }
-            });
-
-            document.getElementById('valTotalGMV').innerText = formatMoney(totalGMV);
-            document.getElementById('valTotalOrders').innerText = totalOrders + ' ออเดอร์';
-            document.getElementById('valTotalComm').innerText = formatMoney(validCommEst);
-            document.getElementById('valCancelOrders').innerText = cancelCount + ' ออเดอร์';
-            document.getElementById('valCancelComm').innerText = 'ค่าคอมหาย: ' + formatMoney(lostComm);
-            document.getElementById('valSettledComm').innerText = formatMoney(settledCommReal);
-
-            document.getElementById('statusCards').innerHTML = `
-                <div class="p-3 rounded-xl border bg-green-50 border-green-200 text-center">
-                    <div class="text-[13px] font-bold text-green-700 mb-1">✅ ได้รับเงินแล้ว (ชัวร์)</div>
-                    <div class="text-xl font-black text-green-600">${statusMap['ได้รับเงินแล้ว'] || 0}</div>
-                </div>
-                <div class="p-3 rounded-xl border bg-orange-50 border-orange-200 text-center">
-                    <div class="text-[13px] font-bold text-orange-700 mb-1">⏳ รอดำเนินการ</div>
-                    <div class="text-xl font-black text-orange-600">${statusMap['รอดำเนินการ'] || 0}</div>
-                </div>
-                <div class="p-3 rounded-xl border bg-yellow-50 border-yellow-200 text-center">
-                    <div class="text-[13px] font-bold text-yellow-700 mb-1">⏱️ รอลูกค้าชำระเงิน</div>
-                    <div class="text-xl font-black text-yellow-600">${statusMap['รอชำระเงิน'] || 0}</div>
-                </div>
-                <div class="p-3 rounded-xl border bg-red-50 border-red-200 text-center">
-                    <div class="text-[13px] font-bold text-red-700 mb-1">❌ โดนยกเลิก</div>
-                    <div class="text-xl font-black text-red-600">${statusMap['ยกเลิก'] || 0}</div>
-                </div>
-            `;
-
-            let sortedShops = Object.keys(shopStats).sort((a,b) => shopStats[b].total - shopStats[a].total);
-            let leftHtml = '';
-            let rightHtml = '';
-
-            if (sortedShops.length === 0) {
-                let emptyRow = `<tr><td colspan="5" class="py-4 text-center text-gray-400 italic">ไม่มีข้อมูล</td></tr>`;
-                leftHtml = emptyRow;
-                rightHtml = `<tr><td colspan="3" class="py-4 text-center text-gray-400 italic">ไม่มีข้อมูล</td></tr>`;
-            } else {
-                sortedShops.forEach(shop => {
-                    let s = shopStats[shop];
-                    
-                    leftHtml += `
-                        <tr class="border-b border-gray-100 hover:bg-gray-50 transition">
-                            <td class="py-2.5 px-2 font-medium text-gray-800 max-w-[120px] truncate" title="${shop}">${shop}</td>
-                            <td class="py-2.5 px-2 text-center font-bold text-[#f97316]">${s.awaiting}</td>
-                            <td class="py-2.5 px-2 text-center font-bold text-[#3b82f6]">${s.pending}</td>
-                            <td class="py-2.5 px-2 text-center font-bold text-[#22c55e]">${s.settled}</td>
-                            <td class="py-2.5 px-2 text-center font-bold text-[#ef4444]">${s.ineligible}</td>
-                        </tr>
-                    `;
-
-                    rightHtml += `
-                        <tr class="border-b border-gray-100 hover:bg-gray-50 transition">
-                            <td class="py-2.5 px-2 font-medium text-gray-800 max-w-[120px] truncate" title="${shop}">${shop}</td>
-                            <td class="py-2.5 px-2 text-right font-bold text-indigo-700">${s.total}</td>
-                            <td class="py-2.5 px-2 text-right font-bold ${s.commReal > 0 ? 'text-green-600' : 'text-gray-400'}">${formatMoney(s.commReal)}</td>
-                        </tr>
-                    `;
+                let headers = json[headerIdx].map(h => h ? h.toString().trim() : '');
+                let dataRows = json.slice(headerIdx + 1);
+                let parsedData = dataRows.map(row => {
+                    let obj = {};
+                    headers.forEach((h, i) => { obj[h] = row[i]; });
+                    return obj;
                 });
+
+                extractData(parsedData, headers, file.name);
+            } catch (err) {
+                hideLoading();
+                alert("อ่านไฟล์ไม่สำเร็จ Error: " + err.message);
             }
+        }, 50);
+    };
+    reader.readAsArrayBuffer(file);
+});
 
-            document.getElementById('leftTableBody').innerHTML = leftHtml;
-            document.getElementById('rightTableBody').innerHTML = rightHtml;
+function cleanNum(val) {
+    if (!val) return 0;
+    return parseFloat(val.toString().replace(/[^\d.-]/g, '')) || 0;
+}
 
-            window.dailyStatsData = dailyStats;
-            switchDailyTab('all'); 
+function parseDateForSort(dateStr) {
+    if (!dateStr) return '';
+    let datePart = dateStr.toString().split(' ')[0];
+    let parts = datePart.includes('/') ? datePart.split('/') : datePart.split('-');
+    if (parts.length === 3) {
+        if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    return datePart;
+}
+
+async function extractData(data, headers, fileName) {
+    showLoading('กำลังแปลงข้อมูล ' + data.length + ' แถว...');
+
+    await new Promise(r => setTimeout(r, 10));
+
+    let getCol = (keyword) => headers.find(h => h && h.toString().toLowerCase().includes(keyword.toLowerCase()));
+
+    let k_orderId   = getCol('Order ID') || getCol('หมายเลขคำสั่งซื้อ') || headers[0];
+    let k_gmv       = getCol('GMV');
+    let k_comm      = getCol('Est. standard commission') || getCol('ค่าคอมมิชชั่นมาตรฐานโดยประมาณ');
+    let k_finalComm = getCol('Total final earned amount') || getCol('ยอดรายได้รวมสุดท้าย');
+    let k_status    = getCol('settlement status') || getCol('สถานะการชำระคำสั่งซื้อ');
+    let k_shop      = getCol('Shop name') || getCol('ชื่อร้านค้า');
+    let k_product   = getCol('Item name') || getCol('Product name') || getCol('ชื่อสินค้า');
+    let k_orderDate = getCol('Order date') || getCol('วันที่สั่งซื้อ');
+    let k_settleDate= getCol('Commission settlement date') || getCol('วันที่ชำระเงินค่าคอมมิชชั่น');
+
+    globalData = [];
+
+    data.forEach(row => {
+        let orderId = row[k_orderId];
+        if (!orderId || orderId.toString().trim() === '') return;
+
+        let rawStatus = row[k_status] ? row[k_status].toString().trim() : 'Unknown';
+        let statusTh = rawStatus;
+
+        if (rawStatus === 'AwaitingPayment' || rawStatus === 'ยังไม่ชำระเงิน' || rawStatus.includes('รอชำระ')) {
+            statusTh = 'รอชำระเงิน';
+        } else if (rawStatus === 'รอดำเนินการ' || rawStatus === 'Pending') {
+            statusTh = 'รอดำเนินการ';
+        } else if (rawStatus === 'ชำระแล้ว' || rawStatus === 'Settled' || rawStatus === 'เสร็จสิ้น') {
+            statusTh = 'ได้รับเงินแล้ว';
+        } else if (rawStatus === 'ไม่มีสิทธิ์' || rawStatus === 'Ineligible' || rawStatus === 'ยกเลิก' || rawStatus === 'คืนเงิน') {
+            statusTh = 'ยกเลิก';
         }
 
-        window.switchDailyTab = function(tabName) {
-            const tabs = ['all', 'settled', 'pending', 'awaiting', 'cancelled'];
-            const activeClasses = {
-                'all': 'tab-active-all',
-                'settled': 'tab-active-settled',
-                'pending': 'tab-active-pending',
-                'awaiting': 'tab-active-awaiting',
-                'cancelled': 'tab-active-cancelled'
+        let rawOrderDate  = row[k_orderDate] || '';
+        let rawSettleDate = row[k_settleDate] || '';
+        let estCommVal    = cleanNum(row[k_comm]);
+        let finalCommVal  = (row[k_finalComm] !== undefined && row[k_finalComm] !== '') ? cleanNum(row[k_finalComm]) : estCommVal;
+
+        let dateDisplayOrder = rawOrderDate.toString().split(' ')[0] || 'ไม่มีวันที่';
+        let dateSortOrder    = parseDateForSort(rawOrderDate);
+
+        let dateDisplaySettle = '';
+        let dateSortSettle    = '';
+        if (statusTh === 'ได้รับเงินแล้ว' && rawSettleDate.toString().trim() !== '' && rawSettleDate.toString().trim() !== '/') {
+            dateDisplaySettle = rawSettleDate.toString().split(' ')[0];
+            dateSortSettle    = parseDateForSort(rawSettleDate);
+        }
+
+        let shopNameStr    = row[k_shop] ? row[k_shop].toString().trim() : 'ไม่ระบุร้านค้า';
+        let rawProduct     = row[k_product];
+        let finalProductName = (rawProduct && rawProduct !== 'undefined' && rawProduct !== 'null' && rawProduct.toString().trim() !== '')
+            ? rawProduct.toString().trim()
+            : `📦 สินค้าลับ (ร้าน: ${shopNameStr})`;
+
+        globalData.push({
+            orderId: orderId.toString(),
+            gmv: cleanNum(row[k_gmv]),
+            commEst: estCommVal,
+            commFinal: finalCommVal,
+            status: statusTh,
+            shop: shopNameStr,
+            productName: finalProductName,
+            dateDisplay: dateDisplayOrder,
+            dateSort: dateSortOrder,
+            settleDisplay: dateDisplaySettle,
+            settleSort: dateSortSettle
+        });
+    });
+
+    showLoading('กำลังบันทึกข้อมูล ' + globalData.length + ' ออเดอร์...');
+    await new Promise(r => setTimeout(r, 10));
+
+    try {
+        await dbSet('affiliateData', globalData);
+        await dbSet('affiliateFileName', fileName);
+        localStorage.setItem('affiliateFileName', fileName);
+    } catch (e) {
+        console.error("IndexedDB save error:", e);
+    }
+
+    updateStatusBar(fileName);
+    document.getElementById('filterSection').classList.remove('hidden');
+    hideLoading();
+    renderDashboard(globalData);
+}
+
+function updateStatusBar(fileName) {
+    let allDates = globalData.map(item => item.dateSort).filter(d => d !== '');
+    let minDate  = allDates.length > 0 ? allDates.reduce((a, b) => a < b ? a : b) : '-';
+    let maxDate  = allDates.length > 0 ? allDates.reduce((a, b) => a > b ? a : b) : '-';
+    let formatThai = (d) => { let p = d.split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : d; };
+    let shortName = fileName.length > 25 ? fileName.substring(0, 15) + '...' + fileName.substring(fileName.lastIndexOf('.')) : fileName;
+
+    document.getElementById('statusText').innerHTML = `✅ ไฟล์: <span class="font-bold text-gray-800">${shortName}</span> <br class="sm:hidden"/>📅 ข้อมูลช่วง: <span class="font-bold text-indigo-600">${formatThai(minDate)} ถึง ${formatThai(maxDate)}</span> <span class="text-[11px] text-gray-400 ml-1">(${globalData.length} ออเดอร์)</span>`;
+    document.getElementById('statusText').className = "text-xs md:text-sm text-green-600 mt-1.5 md:mt-2";
+}
+
+// ==================== ปุ่มไปหน้า Analytics ====================
+document.getElementById('btnGoAnalytics').addEventListener('click', function() {
+    window.open('analytics.html', '_blank');
+});
+
+document.getElementById('btnFilter').addEventListener('click', () => renderDashboard(globalData));
+document.getElementById('btnClear').addEventListener('click', () => {
+    document.getElementById('startDate').value = '';
+    document.getElementById('endDate').value = '';
+    renderDashboard(globalData);
+});
+
+const makeShopPills = (shopsObj, bgClass, textClass) => {
+    let keys = Object.keys(shopsObj).sort((a,b) => shopsObj[b].count - shopsObj[a].count);
+    if (keys.length === 0) return `<span class="text-xs text-gray-400 italic">- ไม่มีข้อมูล -</span>`;
+    return keys.map(s => `<span class="${bgClass} ${textClass} px-2 md:px-2.5 py-1 rounded-md md:rounded-lg text-[10px] md:text-xs font-bold border whitespace-nowrap shadow-sm">${s} (x${shopsObj[s].count}) ${shopsObj[s].comm > 0 ? `👉 ${formatMoney(shopsObj[s].comm)}` : ''}</span>`).join(' ');
+};
+
+function renderDashboard(data) {
+    let start = document.getElementById('startDate').value;
+    let end   = document.getElementById('endDate').value;
+
+    let totalOrders = 0, totalGMV = 0, validCommEst = 0, cancelCount = 0, lostComm = 0, settledCommReal = 0;
+    let statusMap = { 'รอชำระเงิน': 0, 'รอดำเนินการ': 0, 'ได้รับเงินแล้ว': 0, 'ยกเลิก': 0 };
+    let dailyStats = {};
+    let shopStats  = {};
+
+    data.forEach(item => {
+        let passOrderDate = true;
+        if (start || end) {
+            if (!item.dateSort) passOrderDate = false;
+            else {
+                if (start && item.dateSort < start) passOrderDate = false;
+                if (end   && item.dateSort > end)   passOrderDate = false;
+            }
+        }
+
+        let passSettleDate = false;
+        if (item.status === 'ได้รับเงินแล้ว' && item.settleDisplay) {
+            let sortSettle = item.settleSort || parseDateForSort(item.settleDisplay);
+            passSettleDate = true;
+            if (start || end) {
+                if (start && sortSettle < start) passSettleDate = false;
+                if (end   && sortSettle > end)   passSettleDate = false;
+            }
+        }
+
+        if (!passOrderDate && !passSettleDate) return;
+
+        if (!shopStats[item.shop]) shopStats[item.shop] = { total: 0, awaiting: 0, pending: 0, settled: 0, ineligible: 0, commReal: 0 };
+
+        if (passOrderDate) {
+            totalOrders++;
+            totalGMV      += item.gmv;
+            validCommEst  += item.commEst;
+
+            if (statusMap[item.status] !== undefined) statusMap[item.status]++;
+            else statusMap[item.status] = 1;
+
+            if (item.status === 'ยกเลิก') { cancelCount++; lostComm += item.commEst; }
+
+            shopStats[item.shop].total++;
+            if (item.status === 'รอชำระเงิน')      shopStats[item.shop].awaiting++;
+            else if (item.status === 'รอดำเนินการ') shopStats[item.shop].pending++;
+            else if (item.status === 'ยกเลิก')       shopStats[item.shop].ineligible++;
+            else if (item.status === 'ได้รับเงินแล้ว') shopStats[item.shop].settled++;
+
+            if (!dailyStats[item.dateDisplay]) dailyStats[item.dateDisplay] = {
+                dateSort: item.dateSort,
+                totalOrders: 0, totalGMV: 0, totalEstComm: 0,
+                realSettledCount: 0, realSettledComm: 0, realSettledShops: {},
+                sCount: 0, sComm: 0, sShops: {},
+                cCount: 0, cComm: 0, cShops: {},
+                pCount: 0, pComm: 0, pShops: {},
+                aCount: 0, aComm: 0, aShops: {}
             };
-            
-            tabs.forEach(t => {
-                let btn = document.getElementById('tab-' + t);
-                if (!btn) return;
-                
-                btn.className = 'tab-btn bg-white text-gray-600 border border-gray-200 px-4 py-1.5 rounded-full font-bold whitespace-nowrap cursor-pointer';
-                if (t === tabName) {
-                    btn.className = `tab-btn px-4 py-1.5 rounded-full font-bold whitespace-nowrap shadow-sm border ${activeClasses[t]}`;
-                } else {
-                    if(t==='settled') btn.classList.add('hover:bg-green-50', 'hover:text-green-700');
-                    if(t==='cancelled') btn.classList.add('hover:bg-red-50', 'hover:text-red-700');
-                    if(t==='pending') btn.classList.add('hover:bg-orange-50', 'hover:text-orange-700');
-                    if(t==='awaiting') btn.classList.add('hover:bg-yellow-50', 'hover:text-yellow-700');
-                    if(t==='all') btn.classList.add('hover:bg-indigo-50', 'hover:text-indigo-700');
-                }
-            });
 
-            let dailyHtml = '';
-            let sortedDates = Object.keys(window.dailyStatsData).sort((a, b) => window.dailyStatsData[b].dateSort.localeCompare(window.dailyStatsData[a].dateSort));
-            
-            sortedDates.forEach(date => {
-                let d = window.dailyStatsData[date];
-                
-                if (tabName === 'settled' && d.realSettledCount === 0) return;
-                if (tabName === 'cancelled' && d.cCount === 0) return;
-                if (tabName === 'pending' && d.pCount === 0) return;
-                if (tabName === 'awaiting' && d.aCount === 0) return;
+            let d = dailyStats[item.dateDisplay];
+            d.totalOrders++;
+            d.totalGMV    += item.gmv;
+            d.totalEstComm += item.commEst;
 
-                let hasOrders = d.totalOrders > 0; 
-                let contentHtml = '';
-                
-                if (tabName === 'all') {
-                    contentHtml = `
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center text-xs font-medium">
-                            <div class="bg-green-50 p-3 rounded-lg border border-green-100"><span class="block text-[11px] text-green-700 mb-1 font-bold">✅ เงินเข้าวันนี้</span><span class="font-bold text-sm text-gray-800">${d.realSettledCount} ออเดอร์</span><br><span class="text-green-700 text-xs font-bold">ยอดโอน: ${formatMoney(d.realSettledComm)}</span></div>
-                            ${hasOrders ? `
-                            <div class="bg-orange-50 p-3 rounded-lg border border-orange-100"><span class="block text-[11px] text-orange-700 mb-1 font-bold">⏳ รอดำเนินการ</span><span class="font-bold text-sm text-gray-800">${d.pCount} ออเดอร์</span><br><span class="text-orange-700 text-xs font-bold">ค่าคอม: ${formatMoney(d.pComm)}</span></div>
-                            <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-100"><span class="block text-[11px] text-yellow-700 mb-1 font-bold">⏱️ รอชำระเงิน</span><span class="font-bold text-sm text-gray-800">${d.aCount} ออเดอร์</span><br><span class="text-yellow-700 text-xs font-bold">ค่าคอม: ${formatMoney(d.aComm)}</span></div>
-                            <div class="bg-red-50 p-3 rounded-lg border border-red-100"><span class="block text-[11px] text-red-700 mb-1 font-bold">❌ ยกเลิก</span><span class="font-bold text-sm text-gray-800">${d.cCount} ออเดอร์</span><br><span class="text-red-700 text-xs font-bold">ค่าคอมหาย: ${formatMoney(d.cComm)}</span></div>
-                            ` : `<div class="col-span-3 text-gray-400 text-sm flex items-center justify-center italic">วันนี้มีแค่ยอดโอนเข้า ไม่มีออเดอร์ใหม่ครับ</div>`}
-                        </div>`;
-                } else if (tabName === 'settled') {
-                    contentHtml = `
-                        <div class="flex justify-between items-center mb-3 bg-green-500 text-white p-2.5 rounded-t-xl shadow-sm">
-                            <span class="text-sm font-bold">✅ ได้รับเงินแล้ว ${d.realSettledCount} ออเดอร์ (อิงวันโอน)</span>
-                            <span class="text-sm font-bold bg-green-600 px-3 py-1.5 rounded-lg">ยอดสุทธิ: ${formatMoney(d.realSettledComm)}</span>
-                        </div>
-                        <div class="flex flex-wrap gap-2 p-3 border border-t-0 border-green-200 rounded-b-xl bg-green-50/30">${makeShopPills(d.realSettledShops || {}, 'bg-white', 'text-green-800 border-green-200')}</div>`;
-                } else if (tabName === 'cancelled') {
-                    contentHtml = `
-                        <div class="flex justify-between items-center mb-3 bg-red-500 text-white p-2.5 rounded-t-xl shadow-sm">
-                            <span class="text-sm font-bold">❌ ยกเลิก ${d.cCount} ออเดอร์</span>
-                            <span class="text-sm font-bold bg-red-600 px-3 py-1.5 rounded-lg">เงินหาย: ${formatMoney(d.cComm)}</span>
-                        </div>
-                        <div class="flex flex-wrap gap-2 p-3 border border-t-0 border-red-200 rounded-b-xl bg-red-50/30">${makeShopPills(d.cShops, 'bg-white', 'text-red-800 border-red-200')}</div>`;
-                } else if (tabName === 'pending') {
-                    contentHtml = `
-                        <div class="flex justify-between items-center mb-3 bg-orange-500 text-white p-2.5 rounded-t-xl shadow-sm">
-                            <span class="text-sm font-bold">⏳ รอดำเนินการ ${d.pCount} ออเดอร์</span>
-                            <span class="text-sm font-bold bg-orange-600 px-3 py-1.5 rounded-lg">รอลุ้น: ${formatMoney(d.pComm)}</span>
-                        </div>
-                        <div class="flex flex-wrap gap-2 p-3 border border-t-0 border-orange-200 rounded-b-xl bg-orange-50/30">${makeShopPills(d.pShops, 'bg-white', 'text-orange-800 border-orange-200')}</div>`;
-                } else if (tabName === 'awaiting') {
-                    contentHtml = `
-                        <div class="flex justify-between items-center mb-3 bg-yellow-500 text-white p-2.5 rounded-t-xl shadow-sm">
-                            <span class="text-sm font-bold">⏱️ รอชำระเงิน ${d.aCount} ออเดอร์</span>
-                            <span class="text-sm font-bold bg-yellow-600 px-3 py-1.5 rounded-lg">รอลุ้น: ${formatMoney(d.aComm)}</span>
-                        </div>
-                        <div class="flex flex-wrap gap-2 p-3 border border-t-0 border-yellow-200 rounded-b-xl bg-yellow-50/30">${makeShopPills(d.aShops, 'bg-white', 'text-yellow-800 border-yellow-200')}</div>`;
-                }
-
-                dailyHtml += `
-                    <div class="border border-gray-200 rounded-xl p-5 bg-white hover:shadow-lg transition-shadow fade-in">
-                        <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-4 border-b border-gray-100 pb-3 gap-3">
-                            <div>
-                                <span class="font-bold text-gray-900 text-lg">📅 วันที่: ${date}</span>
-                            </div>
-                            ${tabName === 'all' && hasOrders ? `<span class="bg-indigo-100 text-indigo-800 text-xs font-bold px-3 py-1.5 rounded-full shadow-sm">ขายได้วันนี้ ${d.totalOrders} ออเดอร์ | ค่าคอมฯ รวม: ${formatMoney(d.totalEstComm)}</span>` : ''}
-                        </div>
-                        ${contentHtml}
-                    </div>`;
-            });
-
-            if (dailyHtml === '') {
-                dailyHtml = `<div class="text-sm text-gray-500 font-bold p-6 text-center border-2 border-dashed rounded-xl bg-gray-50">ไม่มีข้อมูลในหมวดหมู่นี้ครับ 🎉</div>`;
+            if (item.status === 'ยกเลิก') {
+                d.cCount++; d.cComm += item.commEst;
+                if (!d.cShops[item.shop]) d.cShops[item.shop] = {count: 0, comm: 0};
+                d.cShops[item.shop].count++; d.cShops[item.shop].comm += item.commEst;
+            } else if (item.status === 'รอดำเนินการ') {
+                d.pCount++; d.pComm += item.commEst;
+                if (!d.pShops[item.shop]) d.pShops[item.shop] = {count: 0, comm: 0};
+                d.pShops[item.shop].count++; d.pShops[item.shop].comm += item.commEst;
+            } else if (item.status === 'รอชำระเงิน') {
+                d.aCount++; d.aComm += item.commEst;
+                if (!d.aShops[item.shop]) d.aShops[item.shop] = {count: 0, comm: 0};
+                d.aShops[item.shop].count++; d.aShops[item.shop].comm += item.commEst;
             }
-            document.getElementById('dailyContainer').innerHTML = dailyHtml;
         }
-    </script>
+
+        if (passSettleDate) {
+            settledCommReal += item.commFinal;
+            shopStats[item.shop].commReal += item.commFinal;
+
+            if (!dailyStats[item.settleDisplay]) {
+                dailyStats[item.settleDisplay] = {
+                    dateSort: item.settleSort || parseDateForSort(item.settleDisplay),
+                    totalOrders: 0, totalGMV: 0, totalEstComm: 0,
+                    realSettledCount: 0, realSettledComm: 0, realSettledShops: {},
+                    sCount: 0, sComm: 0, sShops: {},
+                    cCount: 0, cComm: 0, cShops: {},
+                    pCount: 0, pComm: 0, pShops: {},
+                    aCount: 0, aComm: 0, aShops: {}
+                };
+            }
+            let dSettle = dailyStats[item.settleDisplay];
+            dSettle.realSettledCount++;
+            dSettle.realSettledComm += item.commFinal;
+            if (!dSettle.realSettledShops[item.shop]) dSettle.realSettledShops[item.shop] = {count: 0, comm: 0};
+            dSettle.realSettledShops[item.shop].count++;
+            dSettle.realSettledShops[item.shop].comm += item.commFinal;
+        }
+    });
+
+    document.getElementById('valTotalGMV').innerText    = formatMoney(totalGMV);
+    document.getElementById('valTotalOrders').innerText = totalOrders + ' ออเดอร์';
+    document.getElementById('valTotalComm').innerText   = formatMoney(validCommEst);
+    document.getElementById('valCancelOrders').innerText= cancelCount + ' ออเดอร์';
+    document.getElementById('valCancelComm').innerText  = 'หาย: ' + formatMoney(lostComm);
+    document.getElementById('valSettledComm').innerText = formatMoney(settledCommReal);
+
+    document.getElementById('statusCards').innerHTML = `
+        <div class="p-2 md:p-3 rounded-xl border bg-green-50 border-green-200 text-center shadow-sm">
+            <div class="text-[11px] md:text-[13px] font-bold text-green-700 mb-0.5 md:mb-1">✅ ได้รับเงินแล้ว</div>
+            <div class="text-lg md:text-xl font-black text-green-600">${statusMap['ได้รับเงินแล้ว'] || 0}</div>
+        </div>
+        <div class="p-2 md:p-3 rounded-xl border bg-orange-50 border-orange-200 text-center shadow-sm">
+            <div class="text-[11px] md:text-[13px] font-bold text-orange-700 mb-0.5 md:mb-1">⏳ รอดำเนินการ</div>
+            <div class="text-lg md:text-xl font-black text-orange-600">${statusMap['รอดำเนินการ'] || 0}</div>
+        </div>
+        <div class="p-2 md:p-3 rounded-xl border bg-yellow-50 border-yellow-200 text-center shadow-sm">
+            <div class="text-[11px] md:text-[13px] font-bold text-yellow-700 mb-0.5 md:mb-1">⏱️ รอชำระเงิน</div>
+            <div class="text-lg md:text-xl font-black text-yellow-600">${statusMap['รอชำระเงิน'] || 0}</div>
+        </div>
+        <div class="p-2 md:p-3 rounded-xl border bg-red-50 border-red-200 text-center shadow-sm">
+            <div class="text-[11px] md:text-[13px] font-bold text-red-700 mb-0.5 md:mb-1">❌ โดนยกเลิก</div>
+            <div class="text-lg md:text-xl font-black text-red-600">${statusMap['ยกเลิก'] || 0}</div>
+        </div>
+    `;
+
+    let sortedShops = Object.keys(shopStats).sort((a,b) => shopStats[b].total - shopStats[a].total);
+    let leftHtml = '', rightHtml = '';
+
+    if (sortedShops.length === 0) {
+        leftHtml  = `<tr><td colspan="5" class="py-4 text-center text-gray-400 italic text-xs">ไม่มีข้อมูล</td></tr>`;
+        rightHtml = `<tr><td colspan="3" class="py-4 text-center text-gray-400 italic text-xs">ไม่มีข้อมูล</td></tr>`;
+    } else {
+        sortedShops.forEach(shop => {
+            let s = shopStats[shop];
+            leftHtml  += `<tr class="border-b border-gray-100 hover:bg-gray-50 transition text-[11px] md:text-sm">
+                <td class="py-2.5 px-2 font-medium text-gray-800 max-w-[120px] md:max-w-[150px] truncate" title="${shop}">${shop}</td>
+                <td class="py-2.5 px-2 text-center font-bold text-[#f97316]">${s.awaiting}</td>
+                <td class="py-2.5 px-2 text-center font-bold text-[#3b82f6]">${s.pending}</td>
+                <td class="py-2.5 px-2 text-center font-bold text-[#22c55e]">${s.settled}</td>
+                <td class="py-2.5 px-2 text-center font-bold text-[#ef4444]">${s.ineligible}</td>
+            </tr>`;
+            rightHtml += `<tr class="border-b border-gray-100 hover:bg-gray-50 transition text-[11px] md:text-sm">
+                <td class="py-2.5 px-2 font-medium text-gray-800 max-w-[120px] md:max-w-[150px] truncate" title="${shop}">${shop}</td>
+                <td class="py-2.5 px-2 text-center md:text-right font-bold text-indigo-700">${s.total}</td>
+                <td class="py-2.5 px-2 text-right font-bold ${s.commReal > 0 ? 'text-green-600' : 'text-gray-400'}">${formatMoney(s.commReal)}</td>
+            </tr>`;
+        });
+    }
+    document.getElementById('leftTableBody').innerHTML  = leftHtml;
+    document.getElementById('rightTableBody').innerHTML = rightHtml;
+
+    window.dailyStatsData = dailyStats;
+    switchDailyTab('all');
+}
+
+window.switchDailyTab = function(tabName) {
+    const tabs = ['all', 'settled', 'pending', 'awaiting', 'cancelled'];
+    const activeClasses = { all: 'tab-active-all', settled: 'tab-active-settled', pending: 'tab-active-pending', awaiting: 'tab-active-awaiting', cancelled: 'tab-active-cancelled' };
+
+    tabs.forEach(t => {
+        let btn = document.getElementById('tab-' + t);
+        if (!btn) return;
+        btn.className = 'tab-btn bg-white text-gray-600 border border-gray-200 px-3 md:px-4 py-1.5 rounded-full text-[11px] md:text-[13px] font-bold whitespace-nowrap cursor-pointer';
+        if (t === tabName) btn.className = `tab-btn px-3 md:px-4 py-1.5 rounded-full text-[11px] md:text-[13px] font-bold whitespace-nowrap shadow-sm border ${activeClasses[t]}`;
+        else {
+            if (t === 'settled')   btn.classList.add('hover:bg-green-50', 'hover:text-green-700');
+            if (t === 'cancelled') btn.classList.add('hover:bg-red-50', 'hover:text-red-700');
+            if (t === 'pending')   btn.classList.add('hover:bg-orange-50', 'hover:text-orange-700');
+            if (t === 'awaiting')  btn.classList.add('hover:bg-yellow-50', 'hover:text-yellow-700');
+            if (t === 'all')       btn.classList.add('hover:bg-indigo-50', 'hover:text-indigo-700');
+        }
+    });
+
+    let dailyHtml = '';
+    let sortedDates = Object.keys(window.dailyStatsData).sort((a, b) => window.dailyStatsData[b].dateSort.localeCompare(window.dailyStatsData[a].dateSort));
+
+    sortedDates.forEach(date => {
+        let d = window.dailyStatsData[date];
+        if (tabName === 'settled'   && d.realSettledCount === 0) return;
+        if (tabName === 'cancelled' && d.cCount === 0) return;
+        if (tabName === 'pending'   && d.pCount === 0) return;
+        if (tabName === 'awaiting'  && d.aCount === 0) return;
+
+        let hasOrders = d.totalOrders > 0;
+        let contentHtml = '';
+
+        if (tabName === 'all') {
+            contentHtml = `<div class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 text-center text-xs font-medium">
+                <div class="bg-green-50 p-2 md:p-3 rounded-lg border border-green-100 flex flex-col justify-center"><span class="block text-[10px] md:text-[11px] text-green-700 mb-1 font-bold">✅ เงินเข้าวันนี้</span><span class="font-bold text-xs md:text-sm text-gray-800">${d.realSettledCount} ออเดอร์</span><span class="text-green-700 text-[10px] md:text-xs font-bold mt-1">ยอดโอน: ${formatMoney(d.realSettledComm)}</span></div>
+                ${hasOrders ? `
+                <div class="bg-orange-50 p-2 md:p-3 rounded-lg border border-orange-100 flex flex-col justify-center"><span class="block text-[10px] md:text-[11px] text-orange-700 mb-1 font-bold">⏳ รอดำเนินการ</span><span class="font-bold text-xs md:text-sm text-gray-800">${d.pCount} ออเดอร์</span><span class="text-orange-700 text-[10px] md:text-xs font-bold mt-1">ค่าคอม: ${formatMoney(d.pComm)}</span></div>
+                <div class="bg-yellow-50 p-2 md:p-3 rounded-lg border border-yellow-100 flex flex-col justify-center"><span class="block text-[10px] md:text-[11px] text-yellow-700 mb-1 font-bold">⏱️ รอชำระเงิน</span><span class="font-bold text-xs md:text-sm text-gray-800">${d.aCount} ออเดอร์</span><span class="text-yellow-700 text-[10px] md:text-xs font-bold mt-1">ค่าคอม: ${formatMoney(d.aComm)}</span></div>
+                <div class="bg-red-50 p-2 md:p-3 rounded-lg border border-red-100 flex flex-col justify-center"><span class="block text-[10px] md:text-[11px] text-red-700 mb-1 font-bold">❌ ยกเลิก</span><span class="font-bold text-xs md:text-sm text-gray-800">${d.cCount} ออเดอร์</span><span class="text-red-700 text-[10px] md:text-xs font-bold mt-1">เงินหาย: ${formatMoney(d.cComm)}</span></div>
+                ` : `<div class="col-span-2 md:col-span-3 text-gray-400 text-xs md:text-sm flex items-center justify-center italic bg-gray-50/50 rounded-lg">วันนี้มีแค่ยอดโอนเข้า ไม่มีออเดอร์ใหม่ครับ</div>`}
+            </div>`;
+        } else if (tabName === 'settled') {
+            contentHtml = `
+                <div class="flex justify-between items-center mb-2 md:mb-3 bg-green-500 text-white p-2 md:p-2.5 rounded-t-lg md:rounded-t-xl shadow-sm">
+                    <span class="text-[11px] md:text-sm font-bold">✅ ได้รับเงินแล้ว ${d.realSettledCount} ออเดอร์ <span class="hidden sm:inline">(อิงวันโอน)</span></span>
+                    <span class="text-[11px] md:text-sm font-bold bg-green-600 px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg">ยอดสุทธิ: ${formatMoney(d.realSettledComm)}</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5 md:gap-2 p-2 md:p-3 border border-t-0 border-green-200 rounded-b-lg md:rounded-b-xl bg-green-50/30">${makeShopPills(d.realSettledShops || {}, 'bg-white', 'text-green-800 border-green-200')}</div>`;
+        } else if (tabName === 'cancelled') {
+            contentHtml = `
+                <div class="flex justify-between items-center mb-2 md:mb-3 bg-red-500 text-white p-2 md:p-2.5 rounded-t-lg md:rounded-t-xl shadow-sm">
+                    <span class="text-[11px] md:text-sm font-bold">❌ ยกเลิก ${d.cCount} ออเดอร์</span>
+                    <span class="text-[11px] md:text-sm font-bold bg-red-600 px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg">เงินหาย: ${formatMoney(d.cComm)}</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5 md:gap-2 p-2 md:p-3 border border-t-0 border-red-200 rounded-b-lg md:rounded-b-xl bg-red-50/30">${makeShopPills(d.cShops, 'bg-white', 'text-red-800 border-red-200')}</div>`;
+        } else if (tabName === 'pending') {
+            contentHtml = `
+                <div class="flex justify-between items-center mb-2 md:mb-3 bg-orange-500 text-white p-2 md:p-2.5 rounded-t-lg md:rounded-t-xl shadow-sm">
+                    <span class="text-[11px] md:text-sm font-bold">⏳ รอดำเนินการ ${d.pCount} ออเดอร์</span>
+                    <span class="text-[11px] md:text-sm font-bold bg-orange-600 px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg">รอลุ้น: ${formatMoney(d.pComm)}</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5 md:gap-2 p-2 md:p-3 border border-t-0 border-orange-200 rounded-b-lg md:rounded-b-xl bg-orange-50/30">${makeShopPills(d.pShops, 'bg-white', 'text-orange-800 border-orange-200')}</div>`;
+        } else if (tabName === 'awaiting') {
+            contentHtml = `
+                <div class="flex justify-between items-center mb-2 md:mb-3 bg-yellow-500 text-white p-2 md:p-2.5 rounded-t-lg md:rounded-t-xl shadow-sm">
+                    <span class="text-[11px] md:text-sm font-bold">⏱️ รอชำระเงิน ${d.aCount} ออเดอร์</span>
+                    <span class="text-[11px] md:text-sm font-bold bg-yellow-600 px-2 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-lg">รอลุ้น: ${formatMoney(d.aComm)}</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5 md:gap-2 p-2 md:p-3 border border-t-0 border-yellow-200 rounded-b-lg md:rounded-b-xl bg-yellow-50/30">${makeShopPills(d.aShops, 'bg-white', 'text-yellow-800 border-yellow-200')}</div>`;
+        }
+
+        dailyHtml += `
+            <div class="border border-gray-200 rounded-xl p-3 md:p-5 bg-white hover:shadow-lg transition-shadow fade-in">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-3 md:mb-4 border-b border-gray-100 pb-2 md:pb-3 gap-2">
+                    <span class="font-bold text-gray-900 text-sm md:text-lg">📅 วันที่: ${date}</span>
+                    ${tabName === 'all' && hasOrders ? `<span class="bg-indigo-50 text-indigo-700 text-[10px] md:text-xs font-bold px-2.5 md:px-3 py-1 md:py-1.5 rounded-md md:rounded-full border border-indigo-100 w-fit">ขายได้วันนี้ ${d.totalOrders} บิล | ค่าคอมฯ: ${formatMoney(d.totalEstComm)}</span>` : ''}
+                </div>
+                ${contentHtml}
+            </div>`;
+    });
+
+    if (dailyHtml === '') dailyHtml = `<div class="text-xs md:text-sm text-gray-400 font-bold p-4 md:p-6 text-center border-2 border-dashed rounded-xl bg-gray-50">ไม่มีข้อมูลในหมวดหมู่นี้ครับ 🎉</div>`;
+    document.getElementById('dailyContainer').innerHTML = dailyHtml;
+};
+</script>
 </body>
 </html>
