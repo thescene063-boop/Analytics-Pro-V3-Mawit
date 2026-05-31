@@ -55,7 +55,7 @@
         <div>
             <div class="flex items-center gap-3">
                 <a href="index.html" class="bg-white text-slate-600 px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-xs font-semibold hover:bg-slate-50 transition shadow-sm border border-slate-200">⬅️ กลับหน้าหลัก</a>
-                <h1 class="text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 to-purple-600 tracking-tight">📈Mawit รายละเอียดV315</h1>
+                <h1 class="text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-700 to-purple-600 tracking-tight">📈Mawit รายละเอียดลึกๆ</h1>
             </div>
             <p class="text-xs md:text-sm font-medium mt-2 text-slate-500" id="statusText">รอโหลดข้อมูล...</p>
         </div>
@@ -406,7 +406,6 @@ function toggleSection(containerId, iconId) {
     }
 }
 
-// 🟢 เพิ่ม cleanNum คืนมาตรงนี้ครับ!
 function cleanNum(val) {
     if (!val) return 0;
     return parseFloat(val.toString().replace(/[^\d.-]/g, '')) || 0;
@@ -450,12 +449,10 @@ function scrollToTop() {
 }
 
 // ==================== Payout Tracker Feature ====================
-// ผูก Event Listener เมื่อเปลี่ยนวันที่ในช่องค้นหา
 document.getElementById('trackerDate').addEventListener('change', renderTracker);
 
 function initTrackerDefaultDate() {
     if(globalData && globalData.length > 0) {
-        // ดึงวันที่ล่าสุดที่มีการสั่งซื้อมาใส่เป็นค่า Default
         let dates = [...new Set(globalData.map(i => i.dateSort).filter(d => d))].sort();
         if(dates.length > 0) {
             document.getElementById('trackerDate').value = dates[dates.length - 1];
@@ -473,117 +470,140 @@ function renderTracker() {
         return;
     }
 
-    // กรองหาออเดอร์ในวันที่เลือก (เอาเฉพาะสถานะรอดำเนินการ และได้รับเงินแล้ว)
-    let trackerData = globalData.filter(item => item.dateSort === selectedDate && item.status !== 'ยกเลิก' && item.status !== 'รอชำระเงิน');
+    // กรองหาออเดอร์ทั้งหมดในวันที่เลือก
+    let allDateData = globalData.filter(item => item.dateSort === selectedDate);
     
-    if(trackerData.length === 0) {
-        resultContainer.innerHTML = `<div class="text-center py-10 text-rose-500 font-medium bg-rose-50 rounded-xl border border-rose-100">ไม่มีข้อมูลเงินเข้าของวันที่ ${selectedDate.split('-').reverse().join('/')} <br><span class="text-xs text-rose-400 mt-2">(อาจถูกยกเลิกไปหมดแล้ว หรือเป็นบิลรอชำระเงิน)</span></div>`;
+    if(allDateData.length === 0) {
+        resultContainer.innerHTML = `<div class="text-center py-10 text-rose-500 font-medium bg-rose-50 rounded-xl border border-rose-100">ไม่มีข้อมูลการสั่งซื้อของวันที่ ${selectedDate.split('-').reverse().join('/')}</div>`;
         return;
     }
 
+    let cancelCount = 0, cancelAmount = 0;
+    let awaitingCount = 0, awaitingAmount = 0;
     let totalExpected = 0;
     let settleGroups = {};
+    let trackerData = [];
 
-    trackerData.forEach(item => {
-        let sDate = item.settleDisplay || '⏳ รอระบบคำนวณวันโอน'; 
-        let sDateSort = item.settleSort || '9999-99-99'; // ให้พวกยังไม่มีวันโอน ไปอยู่กลุ่มหลังสุด
+    allDateData.forEach(item => {
         let comm = item.status === 'ได้รับเงินแล้ว' ? item.commFinal : item.commEst;
         
-        if(!settleGroups[sDate]) {
-            settleGroups[sDate] = { sortDate: sDateSort, total: 0, count: 0, status: item.status, products: {} };
-        }
-        settleGroups[sDate].total += comm;
-        settleGroups[sDate].count++;
-        totalExpected += comm;
+        if (item.status === 'ยกเลิก') {
+            cancelCount++;
+            cancelAmount += comm;
+        } else if (item.status === 'รอชำระเงิน') {
+            awaitingCount++;
+            awaitingAmount += comm;
+        } else {
+            // รอดำเนินการ หรือ ได้รับเงินแล้ว
+            trackerData.push(item);
+            let sDate = item.settleDisplay || '⏳ รอระบบคำนวณวันโอน'; 
+            let sDateSort = item.settleSort || '9999-99-99'; 
+            
+            if(!settleGroups[sDate]) {
+                settleGroups[sDate] = { sortDate: sDateSort, total: 0, count: 0, status: item.status, products: {} };
+            }
+            settleGroups[sDate].total += comm;
+            settleGroups[sDate].count++;
+            totalExpected += comm;
 
-        // เก็บข้อมูลแยกรุ่นเสื้อและร้านค้า สำหรับวันโอนเงินนั้นๆ
-        let prodKey = `${item.productName}_${item.shop}`;
-        if (!settleGroups[sDate].products[prodKey]) {
-            settleGroups[sDate].products[prodKey] = { name: item.productName, shop: item.shop, count: 0, commSum: 0 };
+            let prodKey = `${item.productName}_${item.shop}`;
+            if (!settleGroups[sDate].products[prodKey]) {
+                settleGroups[sDate].products[prodKey] = { name: item.productName, shop: item.shop, count: 0, commSum: 0 };
+            }
+            settleGroups[sDate].products[prodKey].count++;
+            settleGroups[sDate].products[prodKey].commSum += comm;
         }
-        settleGroups[sDate].products[prodKey].count++;
-        settleGroups[sDate].products[prodKey].commSum += comm;
     });
 
     let html = `
-    <div class="bg-gradient-to-br from-emerald-500 to-teal-500 p-4 rounded-xl shadow-sm text-white mb-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+    <div class="bg-gradient-to-br from-emerald-500 to-teal-500 p-4 md:p-5 rounded-xl shadow-sm text-white mb-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
             <div class="text-[11px] md:text-xs text-emerald-100 font-semibold tracking-wider uppercase mb-1">ยอดรวมทั้งหมดที่จะได้รับจากวันที่ ${selectedDate.split('-').reverse().join('/')}</div>
             <div class="text-3xl md:text-4xl font-black drop-shadow-md">${formatMoney(totalExpected)}</div>
         </div>
-        <div class="bg-white/20 px-3 py-1.5 rounded-lg text-sm font-semibold backdrop-blur-sm border border-white/20">
-            รวม ${trackerData.length} ออเดอร์
+        <div class="flex flex-col items-start md:items-end gap-2 w-full md:w-auto">
+            <div class="bg-white/20 px-3 py-1.5 rounded-lg text-sm font-semibold backdrop-blur-sm border border-white/20 w-full text-center sm:w-auto">
+                ✅ รวมสำเร็จ ${trackerData.length} ออเดอร์
+            </div>
+            <!-- ★ ส่วนแสดงยอดยกเลิก กับ รอชำระ ★ -->
+            <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                <div class="bg-rose-500/60 px-2 py-1 rounded-md text-xs font-semibold backdrop-blur-sm border border-rose-300/30 flex-1 sm:flex-none text-center">
+                    <span class="text-rose-50">❌ ยกเลิก:</span> <span class="ml-0.5">${cancelCount} บิล</span> <span class="opacity-80 font-normal ml-0.5">(${formatMoney(cancelAmount)})</span>
+                </div>
+                <div class="bg-blue-500/60 px-2 py-1 rounded-md text-xs font-semibold backdrop-blur-sm border border-blue-300/30 flex-1 sm:flex-none text-center">
+                    <span class="text-blue-50">💳 รอชำระ:</span> <span class="ml-0.5">${awaitingCount} บิล</span> <span class="opacity-80 font-normal ml-0.5">(${formatMoney(awaitingAmount)})</span>
+                </div>
+            </div>
         </div>
     </div>
-    <div class="space-y-4">
     `;
     
-    // เรียงตามวันที่คาดว่าจะเข้า
-    let sortedSettleDates = Object.keys(settleGroups).sort((a, b) => settleGroups[a].sortDate.localeCompare(settleGroups[b].sortDate));
-    
-    sortedSettleDates.forEach((sd, idx) => {
-        let g = settleGroups[sd];
-        let isPending = sd.includes('รอระบบ');
-        let cardBg = isPending ? 'bg-amber-50 border-amber-200 hover:bg-amber-100' : 'bg-white border-slate-200 hover:bg-slate-50';
-        let titleColor = isPending ? 'text-amber-500' : 'text-slate-400';
-        let dateColor = isPending ? 'text-amber-700' : 'text-slate-800';
-        let amountColor = isPending ? 'text-amber-600' : 'text-emerald-600';
-        let icon = isPending ? '⏳' : '💸';
-        let collapseId = `tracker_detail_${idx}`;
-
-        // เตรียมรายการเสื้อผ้าข้างใน
-        let productListHtml = '';
-        let sortedProds = Object.values(g.products).sort((a, b) => b.commSum - a.commSum);
+    if (trackerData.length > 0) {
+        html += `<div class="space-y-4">`;
+        let sortedSettleDates = Object.keys(settleGroups).sort((a, b) => settleGroups[a].sortDate.localeCompare(settleGroups[b].sortDate));
         
-        sortedProds.forEach(p => {
-            productListHtml += `
-                <div class="flex items-center justify-between py-2 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition px-2 rounded">
-                    <div class="w-[70%]">
-                        <div class="font-semibold text-slate-700 text-sm truncate" title="${p.name}">${p.name}</div>
-                        <div class="text-[10px] text-slate-500 mt-0.5">ร้าน: <span class="font-medium text-indigo-600">${p.shop}</span></div>
+        sortedSettleDates.forEach((sd, idx) => {
+            let g = settleGroups[sd];
+            let isPending = sd.includes('รอระบบ');
+            let cardBg = isPending ? 'bg-amber-50 border-amber-200 hover:bg-amber-100' : 'bg-white border-slate-200 hover:bg-slate-50';
+            let titleColor = isPending ? 'text-amber-500' : 'text-slate-400';
+            let dateColor = isPending ? 'text-amber-700' : 'text-slate-800';
+            let amountColor = isPending ? 'text-amber-600' : 'text-emerald-600';
+            let icon = isPending ? '⏳' : '💸';
+            let collapseId = `tracker_detail_${idx}`;
+
+            let productListHtml = '';
+            let sortedProds = Object.values(g.products).sort((a, b) => b.commSum - a.commSum);
+            
+            sortedProds.forEach(p => {
+                productListHtml += `
+                    <div class="flex items-center justify-between py-2 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition px-2 rounded">
+                        <div class="w-[70%]">
+                            <div class="font-semibold text-slate-700 text-sm truncate" title="${p.name}">${p.name}</div>
+                            <div class="text-[10px] text-slate-500 mt-0.5">ร้าน: <span class="font-medium text-indigo-600">${p.shop}</span></div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold text-emerald-600 text-sm">${formatMoney(p.commSum)}</div>
+                            <div class="text-[10px] text-slate-400 mt-0.5">${p.count} ออเดอร์</div>
+                        </div>
                     </div>
-                    <div class="text-right">
-                        <div class="font-bold text-emerald-600 text-sm">${formatMoney(p.commSum)}</div>
-                        <div class="text-[10px] text-slate-400 mt-0.5">${p.count} ออเดอร์</div>
+                `;
+            });
+
+            html += `
+                <div class="border ${isPending ? 'border-amber-200' : 'border-slate-200'} rounded-xl shadow-sm overflow-hidden transition duration-200">
+                    <div class="${cardBg} p-4 flex flex-col cursor-pointer transition-colors" onclick="toggleTrackerDetail('${collapseId}', 'icon_${collapseId}')">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider mb-1 ${titleColor}">
+                                    <span>${icon}</span> วันที่เงินเข้า
+                                </div>
+                                <div class="font-black ${dateColor} text-base md:text-lg">${sd}</div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="text-right">
+                                    <div class="font-black ${amountColor} text-lg md:text-xl">${formatMoney(g.total)}</div>
+                                    <div class="text-[10px] md:text-xs text-slate-500 font-medium mt-0.5">${g.count} ออเดอร์</div>
+                                </div>
+                                <div id="icon_${collapseId}" class="text-slate-400 font-bold transition-transform duration-300 text-sm">▼</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="${collapseId}" class="hidden p-3 bg-slate-50/50 border-t ${isPending ? 'border-amber-100' : 'border-slate-100'}">
+                        ${productListHtml}
                     </div>
                 </div>
             `;
         });
-
-        html += `
-            <div class="border ${isPending ? 'border-amber-200' : 'border-slate-200'} rounded-xl shadow-sm overflow-hidden transition duration-200">
-                <!-- กดเพื่อกางรายละเอียด -->
-                <div class="${cardBg} p-4 flex flex-col cursor-pointer transition-colors" onclick="toggleTrackerDetail('${collapseId}', 'icon_${collapseId}')">
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <div class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider mb-1 ${titleColor}">
-                                <span>${icon}</span> วันที่เงินเข้า
-                            </div>
-                            <div class="font-black ${dateColor} text-base md:text-lg">${sd}</div>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <div class="text-right">
-                                <div class="font-black ${amountColor} text-lg md:text-xl">${formatMoney(g.total)}</div>
-                                <div class="text-[10px] md:text-xs text-slate-500 font-medium mt-0.5">${g.count} ออเดอร์</div>
-                            </div>
-                            <div id="icon_${collapseId}" class="text-slate-400 font-bold transition-transform duration-300 text-sm">▼</div>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- ส่วนรายละเอียดเสื้อผ้า (ซ่อนไว้ตอนแรก) -->
-                <div id="${collapseId}" class="hidden p-3 bg-slate-50/50 border-t ${isPending ? 'border-amber-100' : 'border-slate-100'}">
-                    ${productListHtml}
-                </div>
-            </div>
-        `;
-    });
+        html += `</div>`;
+    } else {
+        html += `<div class="text-center py-6 text-slate-500 font-medium border-2 border-dashed border-slate-200 rounded-xl bg-white mt-4">⚠️ วันนี้ยังไม่มียอดสั่งซื้อที่สำเร็จ <br/><span class="text-xs font-normal opacity-80">(มีแต่ยอดรอชำระเงิน หรือถูกยกเลิกไปหมดแล้ว)</span></div>`;
+    }
     
-    html += `</div>`;
     resultContainer.innerHTML = html;
 }
 
-// ฟังก์ชันสลับการแสดงผลรายละเอียด Tracker
 window.toggleTrackerDetail = function(contentId, iconId) {
     let el = document.getElementById(contentId);
     let icon = document.getElementById(iconId);
@@ -612,7 +632,7 @@ window.onload = async function() {
             
             hideLoading();
             renderAnalytics(globalData);
-            initTrackerDefaultDate(); // เซ็ตวันที่ Tracker ให้เป็นวันล่าสุด
+            initTrackerDefaultDate();
         } else {
             hideLoading();
             document.getElementById('statusText').innerHTML = `⚠️ ยังไม่มีข้อมูล กรุณาอัปโหลดไฟล์ Excel/CSV`;
@@ -756,7 +776,7 @@ async function extractAndRender(data, headers, fileName) {
     document.getElementById('analyticsContent').classList.remove('hidden');
     hideLoading();
     renderAnalytics(globalData);
-    initTrackerDefaultDate(); // โหลดวันที่ลง Payout Tracker
+    initTrackerDefaultDate(); 
 }
 
 function setupFilters(data) {
